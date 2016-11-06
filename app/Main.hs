@@ -3,7 +3,7 @@ module Main where
 
 -- I'll (hopefully) write some proper tests.
 
-import Lib
+import Lib as P
 import Fold
 import Data.Monoid
 import Data.Functor.Identity
@@ -54,4 +54,16 @@ test11 = mapM_ print
   , P.sum [1..10^7] / fromIntegral (P.length [1..10^6])
   ]
 
-main = test11
+-- The first three perform roughly the same, the last one is more than two times faster
+-- (which is OK, I guess). Note that `take (10^6)` and `scan sum` commute
+-- unlike `P.take (10^6)` and `P.scanl' (+) 0` -- this can be confusing.
+-- I probably should rename `take` to `times` or something like that.
+test14 :: IO ()
+test14 = mapM_ print
+  [ prefold (scan (take (10^6) sum) $ sum) [1..]
+  , prefold (scan sum . take (10^6) $ sum) [1..]
+  , prefold (take (10^6) . scan sum $ sum) [1..]
+  , P.sum . P.take (10^6) $ P.scanl' (+) 0 [1..]
+  ]
+
+main = test14

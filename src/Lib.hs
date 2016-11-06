@@ -1,23 +1,25 @@
-{-# LANGUAGE LambdaCase, BangPatterns #-}
+{-# LANGUAGE LambdaCase, BangPatterns, GeneralizedNewtypeDeriving #-}
 
 module Lib
     ( module Lib
     , module Prelude
+    , module Data.Functor.Identity
     , module Control.Monad
     , module Control.Comonad
     , module Control.Monad.Trans.Class
     ) where
 
-import Prelude hiding (map, filter, takeWhile, dropWhile, take, drop, groupBy, foldMap, length, sum)
+import Prelude hiding (map, filter, takeWhile, dropWhile, take, drop, scan,
+                       groupBy, foldMap, length, sum)
+import Data.Functor.Identity
 import Data.Foldable
 import Data.Traversable
 import Data.Bifunctor
 import Control.Monad (join, (>=>))
 import Control.Comonad
 import Control.Monad.Trans.Class
-import Control.Monad.Trans.State.Strict
 
-infixr 9 .*, <.>
+infixr 9 .*, <.>, <.*>
 
 (.*) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
 g .* f = \x y -> g (f x y)
@@ -27,13 +29,13 @@ g .* f = \x y -> g (f x y)
 g <.> f = fmap g . f
 {-# INLINE (<.>) #-}
 
+(<.*>) :: Functor f => (c -> d) -> (a -> b -> f c) -> a -> b -> f d
+g <.*> f = fmap g .* f
+{-# INLINE (<.*>) #-}
+
 foldM :: (Foldable t, More m) => (b -> a -> m b) -> b -> t a -> m b
 foldM f a xs = foldr (\x r (!a) -> f a x >># r) more xs a
 {-# INLINABLE foldM #-}
-
-mapAccumLM :: (Traversable t, Monad m) => (a -> b -> m (c, b)) -> b -> t a -> m (t c, b)
-mapAccumLM f a xs = runStateT (traverse (\(!a) -> StateT $ f a) xs) a
-{-# INLINABLE mapAccumLM #-}
 
 data Pair a b = Pair !a !b
 
@@ -50,17 +52,15 @@ sndp (Pair x y) = y
 {-# INLINEABLE sndp #-}
 
 -- `more` is emphatically not `pure`, so `More` is unrelated to `Applicative`.
--- A `More` must satisfy the usual monad laws.
--- I feel like there should be a law that relates `(>>#)` and `fmap`.
-class More m where
+-- A `More` must satisfy the usual monad laws and
+-- `fmap f (more x) ~ more (f x)`
+-- I feel like there should be a law that relates `(>>#)` and `fmap`, is it
+-- `fmap g (a >># f) ~ a >># fmap g . f`
+-- where `g :: a -> a`?
+class Functor m => More m where
   infixl 1 >>#
   more  :: a -> m a
   (>>#) :: m a -> (a -> m a) -> m a
-
--- `call . more ~ more`
--- `call (a >># f) ~ call a >># call . f`
-class MonadCall t where
-  call :: Monad m => m a -> t m a
 
 stop :: (Applicative m, More m) => m a -> m a
 stop a = a >># pure
@@ -70,8 +70,12 @@ stopWhen :: (Applicative m, More m) => (a -> Bool) -> m a -> m a
 stopWhen p a = a >># \x -> if p x then pure x else more x
 {-# INLINEABLE stopWhen #-}
 
-data    Drive    a = Stop !a | More !a
-newtype DriveT m a = DriveT { getDriveT :: m (Drive a) }
+-- `call . more ~ more`
+-- `call (a >># f) ~ call a >># call . f`
+class MonadCall t where
+  call :: Monad m => m a -> t m a
+
+data Drive a = Stop !a | More !a
 
 drive :: (a -> b) -> (a -> b) -> Drive a -> b
 drive g f (Stop x) = g x
@@ -102,10 +106,7 @@ instance Traversable Drive where
   traverse f = drive (Stop <.> f) (More <.> f)
   {-# INLINEABLE traverse #-}
 
-instance Monad Drive where
-  return = pure
-  {-# INLINABLE return #-}
-  
+instance Monad Drive where  
   a >>= f = join $ fmap f a where
     join (Stop (Stop x)) = Stop x
     join  a              = More $ runDrive (runDrive a)
@@ -122,6 +123,8 @@ instance Comonad Drive where
 sequenceBi :: Bifunctor f => Drive (f a b) -> f (Drive a) (Drive b)
 sequenceBi = drive (bimap Stop Stop) (bimap More More)
 {-# INLINABLE sequenceBi #-}
+
+newtype DriveT m a = DriveT { getDriveT :: m (Drive a) }
 
 driveT :: Functor f => (a -> b) -> (a -> b) -> DriveT f a -> f b
 driveT g f (DriveT a) = drive g f <$> a
@@ -160,6 +163,7 @@ instance Monad m => More (DriveT m) where
 instance Monad m => Comonad (DriveT m) where
   extract  = error "there is no `extract` for `DriveT m` unless `m` is a comonad, \
                    \ but this is not needed for `extend`, which is more important than `extract`"
+
   extend f = driveDriveT (pure . f . pure) (more . f . more)
   {-# INLINABLE extend #-}
 
@@ -170,3 +174,25 @@ instance MonadTrans DriveT where
 instance MonadCall  DriveT where
   call a = DriveT $ More <$> a
   {-# INLINEABLE call #-}
+
+revert :: Monad m => DriveT m a -> DriveT m a
+revert = driveDriveT more pure
+{-# INLINEABLE revert #-}
+
+newtype ZipDriveT m a = ZipDriveT (DriveT m a)
+                      deriving (Functor, Applicative, More, MonadTrans)
+
+instance Monad m => Comonad (ZipDriveT m) where
+  extract  (ZipDriveT a) = extract a
+  {-# INLINABLE extract #-}
+  
+  extend f (ZipDriveT a) = ZipDriveT $ extend (f . ZipDriveT) a
+  {-# INLINABLE extend #-}
+
+toZipDriveT :: Monad m => DriveT m a -> ZipDriveT m a
+toZipDriveT = ZipDriveT . revert
+{-# INLINABLE toZipDriveT #-}
+
+fromZipDriveT :: Monad m => ZipDriveT m a -> DriveT m a
+fromZipDriveT (ZipDriveT a) = revert a
+{-# INLINABLE fromZipDriveT #-}

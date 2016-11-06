@@ -1,18 +1,12 @@
 {-# LANGUAGE NoImplicitPrelude, ExistentialQuantification #-}
 module Fold where
 
-import Lib hiding (foldM)
+import Lib hiding (foldM, mapAccumLM, scanM)
 import qualified Lib
 import qualified Pure
-import Data.Functor.Identity
 
 -- I'll probably change the definition to allow nested folds.
 data Fold a m b = forall acc. Fold (Drive acc -> m b) (acc -> a -> DriveT m acc) (DriveT m acc)
-
-instance Monad m => Functor (Fold a m) where
-  -- `fmap h . g` is not strictified, because I'm not sure it's needed.
-  fmap h (Fold g f a) = Fold (h <.> g) f a
-  {-# INLINEABLE fmap #-}
 
 driveFold :: Monad m => (b -> a -> DriveT m b) -> DriveT m b -> Fold a m b
 driveFold = Fold (pure . runDrive)
@@ -26,16 +20,22 @@ driveMore :: Monad m => DriveT m b -> Fold a m b
 driveMore = driveFold (more .* const)
 {-# INLINABLE driveMore #-}
 
+instance Monad m => Functor (Fold a m) where
+  -- `fmap h . g` is not strictified, because I'm not sure it's needed.
+  fmap h (Fold g f a) = Fold (h <.> g) f a
+  {-# INLINEABLE fmap #-}
+
 instance Monad m => Applicative (Fold a m) where
   pure = drivePure . pure
   {-# INLINABLE pure #-}
 
   -- `g` is not strictified for the same reason.
-  Fold g1 f1 a1 <*> Fold g2 f2 a2 = Fold (g . runDrive) f a where
+  Fold g1 f1 a1 <*> Fold g2 f2 a2 = Fold (final . runDrive) step (pairW a1 a2) where
     pairW a1 a2 = Pair <$> duplicate a1 <*> duplicate a2
-    g (Pair a1 a2) = (getDriveT a1 >>= g1) <*> (getDriveT a2 >>= g2)
-    f (Pair a1 a2) x = pairW (a1 >># flip f1 x) (a2 >># flip f2 x)
-    a = pairW a1 a2
+
+    step (Pair a1 a2) x = pairW (a1 >># flip f1 x) (a2 >># flip f2 x)
+
+    final (Pair a1 a2) = (getDriveT a1 >>= g1) <*> (getDriveT a2 >>= g2)
   {-# INLINABLE (<*>) #-}
 
 instance MonadTrans (Fold a) where
@@ -87,6 +87,16 @@ drop n (Fold g f a) = Fold (g . fmap sndp) step (Pair n <$> a) where
                     | otherwise = more $ Pair (n - 1) a
 {-# INLINABLE drop #-}
 
+scan :: Monad m => Fold a m b -> Fold b m c -> Fold a m c
+scan (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold (final . sequenceBi) step (pairW a1 a2) where
+  pairW a1 a2 = fromZipDriveT $ Pair <$> toZipDriveT (duplicate a1) <*> toZipDriveT (duplicate a2)
+
+  step (Pair a1' a2') x = pairW (a1' >># flip f1 x) $
+                            bindDriveT (getDriveT a1' >>= g1) (\y -> a2' >># flip f2 y)
+
+  final (Pair a1' a2') = traverse runDriveT a2' >>= g2
+{-# INLINEABLE scan #-}
+
 groupBy :: Monad m => (a -> a -> Bool) -> Fold a m b -> Fold b m c -> Fold a m c
 groupBy p (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold (final . runDrive) step acc where
   acc = more . Pair (const True) $ Pair a1 a2
@@ -94,7 +104,7 @@ groupBy p (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold (final . runDrive) step acc whe
   step  (Pair p' (Pair a1' a2')) x
     | p' x      = more  . Pair (p x) $ Pair (a1' >># flip f1 x) a2'
     | otherwise = extend (Pair (p x) . Pair (a1  >># flip f1 x)) $
-                    bindDriveT (getDriveT a1' >>= g1) (\x -> a2' >># flip f2 x)
+                    bindDriveT (getDriveT a1' >>= g1) (\y -> a2' >># flip f2 y)
 
   final (Pair p' (Pair a1' a2')) = do
     x <- getDriveT a1' >>= g1
@@ -113,7 +123,7 @@ prefoldM :: (Monad m, Foldable t) => Fold a m b -> t a -> m b
 prefoldM f = runDriveT . consume f >=> runFold
 {-# INLINABLE prefoldM #-}
 
-prefold :: (Foldable t) => Fold a Identity b -> t a -> b
+prefold :: Foldable t => Fold a Identity b -> t a -> b
 prefold = runIdentity .* prefoldM 
 {-# INLINABLE prefold #-}
 
