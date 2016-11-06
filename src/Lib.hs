@@ -52,7 +52,6 @@ sndp (Pair x y) = y
 -- `more` is emphatically not `pure`, so `More` is unrelated to `Applicative`.
 -- A `More` must satisfy the usual monad laws.
 -- I feel like there should be a law that relates `(>>#)` and `fmap`.
--- Is it `fmap g (a >># f) ~ fmap g a >># fmap g . f`?
 class More m where
   infixl 1 >>#
   more  :: a -> m a
@@ -104,13 +103,16 @@ instance Traversable Drive where
   {-# INLINEABLE traverse #-}
 
 instance Monad Drive where
-  return  = pure
+  return = pure
+  {-# INLINABLE return #-}
+  
   a >>= f = join $ fmap f a where
     join (Stop (Stop x)) = Stop x
     join  a              = More $ runDrive (runDrive a)
+  {-# INLINABLE (>>=) #-}
 
 instance Comonad Drive where
-  extract  = runDrive
+  extract = runDrive
   {-# INLINEABLE extract #-}
   
   extend f = drive (Stop . f . Stop) (More . f . More)

@@ -11,7 +11,7 @@ data Fold a m b = forall acc. Fold (Drive acc -> m b) (acc -> a -> DriveT m acc)
 
 instance Monad m => Functor (Fold a m) where
   -- `fmap h . g` is not strictified, because I'm not sure it's needed.
-  fmap h (Fold g f a) = Fold (fmap h . g) f a
+  fmap h (Fold g f a) = Fold (h <.> g) f a
   {-# INLINEABLE fmap #-}
 
 driveFold :: Monad m => (b -> a -> DriveT m b) -> DriveT m b -> Fold a m b
