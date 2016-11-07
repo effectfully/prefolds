@@ -11,7 +11,7 @@ and it'll stream.
 With `prefolds` you can write
 
 ```
-prefold ((/) <$> take (10^7) sum <*> take (10^6) genericLength) [1..]
+execute ((/) <$> take (10^7) sum <*> take (10^6) genericLength) [1..]
 ```
 
 and it'll stream too.

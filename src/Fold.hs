@@ -87,14 +87,32 @@ drop n (Fold g f a) = Fold (g . fmap sndp) step (Pair n <$> a) where
                     | otherwise = more $ Pair (n - 1) a
 {-# INLINABLE drop #-}
 
+stepFeed :: Monad m
+         => DriveT m a
+         -> (Drive a -> m b)
+         -> DriveT m c
+         -> (c -> b -> DriveT m c)
+         -> DriveT m c
+stepFeed a f b g = bindDriveT (getDriveT a >>= f) $ \y -> b >># flip g y
+{-# INLINEABLE stepFeed #-}
+
+finalFeed :: Monad m
+          => DriveT m a
+          -> (Drive a -> m b)
+          -> DriveT m c
+          -> (c -> b -> DriveT m c)
+          -> (Drive c -> m d)
+          -> m d
+finalFeed a f b g h = getDriveT (stepFeed a f b g) >>= h
+{-# INLINEABLE finalFeed #-}
+
 scan :: Monad m => Fold a m b -> Fold b m c -> Fold a m c
-scan (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold (final . sequenceBi) step (pairW a1 a2) where
+scan (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold (final . runDrive) step (pairW a1 a2) where
   pairW a1 a2 = fromZipDriveT $ Pair <$> toZipDriveT (duplicate a1) <*> toZipDriveT (duplicate a2)
 
-  step (Pair a1' a2') x = pairW (a1' >># flip f1 x) $
-                            bindDriveT (getDriveT a1' >>= g1) (\y -> a2' >># flip f2 y)
+  step (Pair a1' a2') x = pairW (a1' >># flip f1 x) $ stepFeed a1' g1 a2' f2
 
-  final (Pair a1' a2') = traverse runDriveT a2' >>= g2
+  final (Pair a1' a2') = finalFeed a1' g1 a2' f2 g2
 {-# INLINEABLE scan #-}
 
 groupBy :: Monad m => (a -> a -> Bool) -> Fold a m b -> Fold b m c -> Fold a m c
@@ -103,12 +121,9 @@ groupBy p (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold (final . runDrive) step acc whe
 
   step  (Pair p' (Pair a1' a2')) x
     | p' x      = more  . Pair (p x) $ Pair (a1' >># flip f1 x) a2'
-    | otherwise = extend (Pair (p x) . Pair (a1  >># flip f1 x)) $
-                    bindDriveT (getDriveT a1' >>= g1) (\y -> a2' >># flip f2 y)
+    | otherwise = extend (Pair (p x) . Pair (a1  >># flip f1 x)) $ stepFeed a1' g1 a2' f2
 
-  final (Pair p' (Pair a1' a2')) = do
-    x <- getDriveT a1' >>= g1
-    getDriveT (a2' >># flip f2 x) >>= g2
+  final (Pair p' (Pair a1' a2')) = finalFeed a1' g1 a2' f2 g2
 {-# INLINABLE groupBy #-}
 
 group :: (Monad m, Eq a) => Fold a m b -> Fold b m c -> Fold a m c
@@ -119,13 +134,13 @@ consume :: (Monad m, Foldable t) => Fold a m b -> t a -> DriveT m (Fold a m b)
 consume = Lib.foldM (flip feed)
 {-# INLINABLE consume #-}
 
-prefoldM :: (Monad m, Foldable t) => Fold a m b -> t a -> m b
-prefoldM f = runDriveT . consume f >=> runFold
-{-# INLINABLE prefoldM #-}
+executeM :: (Monad m, Foldable t) => Fold a m b -> t a -> m b
+executeM f = runDriveT . consume f >=> runFold
+{-# INLINABLE executeM #-}
 
-prefold :: Foldable t => Fold a Identity b -> t a -> b
-prefold = runIdentity .* prefoldM 
-{-# INLINABLE prefold #-}
+execute :: Foldable t => Fold a Identity b -> t a -> b
+execute = runIdentity .* executeM 
+{-# INLINABLE execute #-}
 
 generalize :: Monad m => Pure.Fold a b -> Fold a m b
 generalize (Pure.Fold g f a) = Fold (pure . g . runDrive) (more .* f) (more a)
