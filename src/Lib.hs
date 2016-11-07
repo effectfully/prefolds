@@ -1,4 +1,4 @@
-{-# LANGUAGE LambdaCase, BangPatterns, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE PatternSynonyms, LambdaCase, BangPatterns, GeneralizedNewtypeDeriving #-}
 
 module Lib
     ( module Lib
@@ -9,7 +9,7 @@ module Lib
     , module Control.Monad.Trans.Class
     ) where
 
-import Prelude hiding (map, filter, takeWhile, dropWhile, take, drop, scan,
+import Prelude hiding (map, filter, takeWhile, dropWhile, span, take, drop, scan,
                        groupBy, foldMap, length, sum)
 import Data.Functor.Identity
 import Data.Foldable
@@ -20,7 +20,8 @@ import Control.Comonad
 import Control.Monad.Trans.Class
 
 infixr 9 .*, <.>, <.*>
-
+infixl 4 <&>
+  
 (.*) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
 g .* f = \x y -> g (f x y)
 {-# INLINE (.*) #-}
@@ -33,11 +34,22 @@ g <.> f = fmap g . f
 g <.*> f = fmap g .* f
 {-# INLINE (<.*>) #-}
 
+(<&>) :: (Monad m) => m (a -> m b) -> m a -> m b
+f <&> a = f >>= (a >>=)
+{-# INLINE (<&>) #-}
+
 foldM :: (Foldable t, More m) => (b -> a -> m b) -> b -> t a -> m b
 foldM f a xs = foldr (\x r (!a) -> f a x >># r) more xs a
 {-# INLINABLE foldM #-}
 
 data Pair a b = Pair !a !b
+
+pattern Pair3 x1 x2 x3    = Pair x1 (Pair x2  x3)
+pattern Pair4 x1 x2 x3 x4 = Pair x1 (Pair x2 (Pair x3 x4))
+
+instance Functor (Pair a) where
+  fmap g (Pair x y) = Pair x (g y)
+  {-# INLINEABLE fmap #-}
 
 instance Bifunctor Pair where
   bimap f g (Pair x y) = Pair (f x) (g y)
@@ -85,6 +97,10 @@ drive g f (More x) = f x
 runDrive :: Drive a -> a
 runDrive = drive id id
 {-# INLINEABLE runDrive #-}
+
+isStop :: Drive a -> Bool
+isStop = drive (const True) (const False)
+{-# INLINABLE isStop #-}
 
 instance Functor Drive where
   fmap f = drive (Stop . f) (More . f)
@@ -141,6 +157,10 @@ bindDriveT a f = DriveT $ a >>= getDriveT . f
 driveDriveT :: Monad m => (a -> DriveT m b) -> (a -> DriveT m b) -> DriveT m a -> DriveT m b
 driveDriveT f g (DriveT a) = bindDriveT a $ drive f g
 {-# INLINABLE driveDriveT #-}
+
+isStopT :: Functor f => DriveT f a -> f Bool
+isStopT (DriveT a) = isStop <$> a
+{-# INLINABLE isStopT #-}
 
 instance Functor f => Functor (DriveT f) where
   fmap f (DriveT a) = DriveT $ fmap (fmap f) a

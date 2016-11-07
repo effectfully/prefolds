@@ -14,7 +14,7 @@ test2 :: IO ()
 test2 = executeM (take 3 $ traverse_ print) [1..]
 
 test3 :: IO ()
-test3 = executeM (groupBy (<) (take 2 $ foldMap Sum) $ traverse_ print) $ [1,2,3,2,4,6,5,8,3,1,2,3]
+test3 = executeM (groupBy (<) (foldMap Sum) $ traverse_ print) $ [1,2,3,2,4,6,5,8,3,1,2,3]
 
 test4 :: IO ()
 test4 = executeM (take 15 . groupBy (<) (take 2 $ foldMap Sum) $ traverse_ print) $ [1,2,3,2,4,6,5,8,3] ++ [1..]
@@ -39,10 +39,6 @@ test9 :: IO ()
 test9 = print $
           P.sum . P.map (getSum . P.foldMap Sum) . P.group . P.take (10^7) $
             cycle $ replicate 10 1 ++ replicate 10 (2 :: Integer)
-
--- 140 MB total memory in use.
-fail1 :: IO ()
-fail1 = print $ uncurry (\xs ys -> P.sum xs + P.sum ys) . span (1 ==) $ replicate (10^7) (1 :: Integer)
 
 test10 :: IO ()
 test10 = print . runIdentity $ executeM ((/) <$> sum <*> genericLength) [1..10^7]
@@ -71,4 +67,27 @@ test15 = mapM_ print
   , execute (scan sum $ filter even list) [1..5]
   ]
 
-main = test14
+test16 :: IO ()
+test16 = executeM (weld_ (takeWhile (<= 5) . map (^2) $ traverse_ print)
+                         (take 3 $ traverse_ print)) [1..]
+
+test17 :: IO ()
+test17 = executeM (connect_ (takeWhile (<= 5) . map (^2) $ traverse_ print)
+                            (take 0 $ traverse_ print)) [1..]
+
+test18 :: IO ()
+test18 = executeM (connect_ (take 0 sum) (take 1 $ traverse_ print)) [1..]
+
+-- 140 MB total memory in use.
+fail1 :: IO ()
+fail1 = print . uncurry (\xs ys -> P.sum xs + P.sum ys) . P.span (1 ==) $
+          replicate (10^7) (1 :: Integer)
+
+-- 2 MB total memory in use.
+nofail1 :: IO ()
+nofail1 = print . execute (span (+) (1 ==) sum sum) $ replicate (10^7) (1 :: Integer)
+
+test19 :: IO ()
+test19 = executeM (span_ (< 4) (map (^2) $ traverse_ print) (take 5 $ traverse_ print)) [1..]
+
+main = test19

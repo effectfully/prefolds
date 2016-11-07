@@ -1,15 +1,14 @@
-{-# LANGUAGE NoImplicitPrelude, ExistentialQuantification #-}
+{-# LANGUAGE NoImplicitPrelude, RankNTypes, ExistentialQuantification #-}
 module Fold where
 
 import Lib hiding (foldM, mapAccumLM, scanM)
 import qualified Lib
 import qualified Pure
 
--- I'll probably change the definition to allow nested folds.
-data Fold a m b = forall acc. Fold (Drive acc -> m b) (acc -> a -> DriveT m acc) (DriveT m acc)
+data Fold a m b = forall acc. Fold (acc -> m b) (acc -> a -> DriveT m acc) (DriveT m acc)
 
 driveFold :: Monad m => (b -> a -> DriveT m b) -> DriveT m b -> Fold a m b
-driveFold = Fold (pure . runDrive)
+driveFold = Fold pure
 {-# INLINEABLE driveFold #-}
 
 drivePure :: Monad m => DriveT m b -> Fold a m b
@@ -30,12 +29,12 @@ instance Monad m => Applicative (Fold a m) where
   {-# INLINABLE pure #-}
 
   -- `g` is not strictified for the same reason.
-  Fold g1 f1 a1 <*> Fold g2 f2 a2 = Fold (final . runDrive) step (pairW a1 a2) where
+  Fold g1 f1 a1 <*> Fold g2 f2 a2 = Fold final step (pairW a1 a2) where
     pairW a1 a2 = Pair <$> duplicate a1 <*> duplicate a2
 
-    step (Pair a1 a2) x = pairW (a1 >># flip f1 x) (a2 >># flip f2 x)
+    step (Pair a1' a2') x = pairW (a1' >># flip f1 x) (a2' >># flip f2 x)
 
-    final (Pair a1 a2) = (getDriveT a1 >>= g1) <*> (getDriveT a2 >>= g2)
+    final (Pair a1' a2') = (runDriveT a1' >>= g1) <*> (runDriveT a2' >>= g2)
   {-# INLINABLE (<*>) #-}
 
 instance MonadTrans (Fold a) where
@@ -47,7 +46,7 @@ instance MonadCall  (Fold a) where
   {-# INLINABLE call #-}
 
 runFold :: Monad m => Fold a m b -> m b
-runFold (Fold g f a) = getDriveT a >>= g
+runFold (Fold g f a) = runDriveT a >>= g
 {-# INLINEABLE runFold #-}
 
 feed :: Monad m => a -> Fold a m b -> DriveT m (Fold a m b)
@@ -68,13 +67,64 @@ takeWhile p (Fold g f a) = Fold g (\a x -> if p x then f a x else pure a) a
 {-# INLINABLE takeWhile #-}
 
 dropWhile :: Monad m => (a -> Bool) -> Fold a m b -> Fold a m b
-dropWhile p (Fold g f a) = Fold (g . fmap sndp) step (Pair False <$> a) where
+dropWhile p (Fold g f a) = Fold (g . sndp) step (Pair False <$> a) where
   step (Pair b a) x | b || not (p x) = Pair True <$> f a x
                     | otherwise      = more $ Pair False a
 {-# INLINABLE dropWhile #-}
 
+combine :: Monad m
+        => (forall a. (a -> a) -> a -> a)
+        -> (b -> c -> m d) -> Fold a m b -> Fold a m c -> Fold a m d
+combine c h (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
+  acc = bindDriveT (isStopT a1) $ \b -> Pair3 b <$> a1 <*> duplicate a2
+
+  step (Pair3 b a1' a2') x
+    | b         = extend (Pair3 True a1') $ a2' >># flip f2 x
+    | otherwise = driveDriveT (\a1'' -> extend (Pair3 True  a1'') $ c (>># flip f2 x) a2')
+                              (\a1'' -> more $ Pair3 False a1'' a2')
+                              (f1 a1' x)
+
+  final (Pair3 b a1' a2') = h <$> g1 a1' <&> (runDriveT a2' >>= g2)
+{-# INLINABLE combine #-}
+
+connectM :: Monad m => (b -> c -> m d) -> Fold a m b -> Fold a m c -> Fold a m d
+connectM = combine (const id)
+{-# INLINABLE connectM #-}
+
+connect :: Monad m => (b -> c -> d) -> Fold a m b -> Fold a m c -> Fold a m d
+connect f = connectM (pure .* f)
+{-# INLINABLE connect #-}
+
+connect_ :: Monad m => Fold a m b -> Fold a m c -> Fold a m c
+connect_ = connect (const id)
+{-# INLINABLE connect_ #-}
+
+weldM :: Monad m => (b -> c -> m d) -> Fold a m b -> Fold a m c -> Fold a m d
+weldM = combine ($)
+{-# INLINABLE weldM #-}
+
+weld :: Monad m => (b -> c -> d) -> Fold a m b -> Fold a m c -> Fold a m d
+weld f = weldM (pure .* f)
+{-# INLINABLE weld #-}
+
+weld_ :: Monad m => Fold a m b -> Fold a m c -> Fold a m c
+weld_ = weld (const id)
+{-# INLINABLE weld_ #-}
+
+spanM :: Monad m => (b -> c -> m d) -> (a -> Bool) -> Fold a m b -> Fold a m c -> Fold a m d
+spanM h p = weldM h . takeWhile p
+{-# INLINEABLE spanM #-}
+
+span :: Monad m => (b -> c -> d) -> (a -> Bool) -> Fold a m b -> Fold a m c -> Fold a m d
+span f = spanM (pure .* f)
+{-# INLINEABLE span #-}
+
+span_ :: Monad m => (a -> Bool) -> Fold a m b -> Fold a m c -> Fold a m c
+span_ = span (const id)
+{-# INLINEABLE span_ #-}
+
 take :: Monad m => Int -> Fold a m b -> Fold a m b
-take n (Fold g f a) = Fold (g . fmap sndp) step acc where
+take n (Fold g f a) = Fold (g . sndp) step acc where
   acc = stopWhen ((<= 0) . fstp) $ Pair n <$> a
   step (Pair n a) x | n <= 0    = error "prefolds.take: something went wrong"
                     | n == 1    = stop $ Pair 0 <$> f a x
@@ -82,48 +132,33 @@ take n (Fold g f a) = Fold (g . fmap sndp) step acc where
 {-# INLINABLE take #-}
   
 drop :: Monad m => Int -> Fold a m b -> Fold a m b
-drop n (Fold g f a) = Fold (g . fmap sndp) step (Pair n <$> a) where
+drop n (Fold g f a) = Fold (g . sndp) step (Pair n <$> a) where
   step (Pair n a) x | n <= 0    = Pair n <$> f a x
                     | otherwise = more $ Pair (n - 1) a
 {-# INLINABLE drop #-}
 
-stepFeed :: Monad m
-         => DriveT m a
-         -> (Drive a -> m b)
-         -> DriveT m c
-         -> (c -> b -> DriveT m c)
-         -> DriveT m c
-stepFeed a f b g = bindDriveT (getDriveT a >>= f) $ \y -> b >># flip g y
-{-# INLINEABLE stepFeed #-}
-
-finalFeed :: Monad m
-          => DriveT m a
-          -> (Drive a -> m b)
-          -> DriveT m c
-          -> (c -> b -> DriveT m c)
-          -> (Drive c -> m d)
-          -> m d
-finalFeed a f b g h = getDriveT (stepFeed a f b g) >>= h
-{-# INLINEABLE finalFeed #-}
-
 scan :: Monad m => Fold a m b -> Fold b m c -> Fold a m c
-scan (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold (final . runDrive) step (pairW a1 a2) where
-  pairW a1 a2 = fromZipDriveT $ Pair <$> toZipDriveT (duplicate a1) <*> toZipDriveT (duplicate a2)
+scan (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step (pair a1 a2) where
+  pair a1 a2 = fromZipDriveT $ Pair <$> toZipDriveT a1 <*> toZipDriveT (duplicate a2)
+  cross a1' a2' = bindDriveT (g1 a1') $ \y -> a2' >># flip f2 y
 
-  step (Pair a1' a2') x = pairW (a1' >># flip f1 x) $ stepFeed a1' g1 a2' f2
+  step (Pair a1' a2') x = pair (f1 a1' x) $ cross a1' a2'
 
-  final (Pair a1' a2') = finalFeed a1' g1 a2' f2 g2
+  final (Pair a1' a2') = runDriveT (cross a1' a2') >>= g2
 {-# INLINEABLE scan #-}
 
 groupBy :: Monad m => (a -> a -> Bool) -> Fold a m b -> Fold b m c -> Fold a m c
-groupBy p (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold (final . runDrive) step acc where
-  acc = more . Pair (const True) $ Pair a1 a2
+groupBy p (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
+  cross a1' a2' = bindDriveT (runDriveT a1' >>= g1) (f2 a2')
+  
+  acc = Pair3 (const True) a1 <$> a2
 
-  step  (Pair p' (Pair a1' a2')) x
-    | p' x      = more  . Pair (p x) $ Pair (a1' >># flip f1 x) a2'
-    | otherwise = extend (Pair (p x) . Pair (a1  >># flip f1 x)) $ stepFeed a1' g1 a2' f2
+  step (Pair3 p' a1' a2') x
+    | p' x      = more $ pair a1' a2'
+    | otherwise = pair a1 <$> cross a1' a2'
+    where pair a = Pair3 (p x) (a >># flip f1 x)
 
-  final (Pair p' (Pair a1' a2')) = finalFeed a1' g1 a2' f2 g2
+  final (Pair3 p' a1' a2') = runDriveT (cross a1' a2') >>= g2
 {-# INLINABLE groupBy #-}
 
 group :: (Monad m, Eq a) => Fold a m b -> Fold b m c -> Fold a m c
@@ -143,7 +178,7 @@ execute = runIdentity .* executeM
 {-# INLINABLE execute #-}
 
 generalize :: Monad m => Pure.Fold a b -> Fold a m b
-generalize (Pure.Fold g f a) = Fold (pure . g . runDrive) (more .* f) (more a)
+generalize (Pure.Fold g f a) = Fold (pure . g) (more .* f) (more a)
 {-# INLINABLE generalize #-}
 
 foldM :: Monad m => (b -> a -> m b) -> b -> Fold a m b
