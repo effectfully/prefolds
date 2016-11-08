@@ -1,5 +1,4 @@
-{-# LANGUAGE PatternSynonyms, LambdaCase, BangPatterns, GeneralizedNewtypeDeriving #-}
-
+{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, PatternSynonyms, LambdaCase, BangPatterns, GeneralizedNewtypeDeriving #-}
 module Lib
     ( module Lib
     , module Prelude
@@ -20,8 +19,8 @@ import Control.Comonad
 import Control.Monad.Trans.Class
 
 infixr 9 .*, <.>, <.*>
-infixl 4 <&>
-  
+infixl 4 <$>>, <*>>
+
 (.*) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
 g .* f = \x y -> g (f x y)
 {-# INLINE (.*) #-}
@@ -34,10 +33,6 @@ g <.> f = fmap g . f
 g <.*> f = fmap g .* f
 {-# INLINE (<.*>) #-}
 
-(<&>) :: (Monad m) => m (a -> m b) -> m a -> m b
-f <&> a = f >>= (a >>=)
-{-# INLINE (<&>) #-}
-
 foldM :: (Foldable t, More m) => (b -> a -> m b) -> b -> t a -> m b
 foldM f a xs = foldr (\x r (!a) -> f a x >># r) more xs a
 {-# INLINABLE foldM #-}
@@ -49,19 +44,41 @@ pattern Pair4 x1 x2 x3 x4 = Pair x1 (Pair x2 (Pair x3 x4))
 
 instance Functor (Pair a) where
   fmap g (Pair x y) = Pair x (g y)
-  {-# INLINEABLE fmap #-}
+  {-# INLINE fmap #-}
 
 instance Bifunctor Pair where
   bimap f g (Pair x y) = Pair (f x) (g y)
-  {-# INLINEABLE bimap #-}
+  {-# INLINE bimap #-}
 
 fstp :: Pair a b -> a
 fstp (Pair x y) = x
-{-# INLINEABLE fstp #-}
+{-# INLINE fstp #-}
 
 sndp :: Pair a b -> b
 sndp (Pair x y) = y
-{-# INLINEABLE sndp #-}
+{-# INLINE sndp #-}
+
+-- A variant of http://elvishjerricco.github.io/2016/10/12/kleisli-functors.html
+class (Monad m, Functor f) => KleisliFunctor m f where
+  kmap :: (a -> m b) -> f a -> f b
+  kmap = kjoin .* fmap
+  {-# INLINE kmap #-}
+
+  kjoin :: f (m a) -> f a
+  kjoin = kmap id
+  {-# INLINE kjoin #-}
+
+instance Monad m => KleisliFunctor m m where
+  kmap = (=<<)
+  {-# INLINE kmap #-}
+
+(<$>>) :: KleisliFunctor m f => (a -> m b) -> f a -> f b
+(<$>>) = kmap
+{-# INLINE (<$>>) #-}
+
+(<*>>) :: (KleisliFunctor m f, Applicative f) => f (a -> m b) -> f a -> f b
+h <*>> a = kjoin $ h <*> a
+{-# INLINE (<*>>) #-}
 
 -- `more` is emphatically not `pure`, so `More` is unrelated to `Applicative`.
 -- A `More` must satisfy the usual monad laws and

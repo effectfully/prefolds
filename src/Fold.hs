@@ -1,9 +1,11 @@
-{-# LANGUAGE NoImplicitPrelude, RankNTypes, ExistentialQuantification #-}
+{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, NoImplicitPrelude, RankNTypes, ExistentialQuantification #-}
 module Fold where
 
 import Lib hiding (foldM, mapAccumLM, scanM)
 import qualified Lib
 import qualified Pure
+
+infixl 4 </>, />, </>>, <//>, //>, <//>>
 
 data Fold a m b = forall acc. Fold (acc -> m b) (acc -> a -> DriveT m acc) (DriveT m acc)
 
@@ -23,6 +25,10 @@ instance Monad m => Functor (Fold a m) where
   -- `fmap h . g` is not strictified, because I'm not sure it's needed.
   fmap h (Fold g f a) = Fold (h <.> g) f a
   {-# INLINEABLE fmap #-}
+
+instance Monad m => KleisliFunctor m (Fold a m) where
+  kmap h (Fold g f a) = Fold (g >=> h) f a
+  {-# INLINEABLE kmap #-}
 
 instance Monad m => Applicative (Fold a m) where
   pure = drivePure . pure
@@ -74,8 +80,8 @@ dropWhile p (Fold g f a) = Fold (g . sndp) step (Pair False <$> a) where
 
 combine :: Monad m
         => (forall a. (a -> a) -> a -> a)
-        -> (b -> c -> m d) -> Fold a m b -> Fold a m c -> Fold a m d
-combine c h (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
+        -> Fold a m (b -> c) -> Fold a m b -> Fold a m c
+combine c (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
   acc = bindDriveT (isStopT a1) $ \b -> Pair3 b <$> a1 <*> duplicate a2
 
   step (Pair3 b a1' a2') x
@@ -84,35 +90,35 @@ combine c h (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
                               (\a1'' -> more $ Pair3 False a1'' a2')
                               (f1 a1' x)
 
-  final (Pair3 b a1' a2') = h <$> g1 a1' <&> (runDriveT a2' >>= g2)
+  final (Pair3 b a1' a2') = g1 a1' <*> (runDriveT a2' >>= g2)
 {-# INLINABLE combine #-}
 
-connectM :: Monad m => (b -> c -> m d) -> Fold a m b -> Fold a m c -> Fold a m d
-connectM = combine (const id)
-{-# INLINABLE connectM #-}
+(</>) :: Monad m => Fold a m (b -> c) -> Fold a m b -> Fold a m c
+(</>) = combine (const id)
+{-# INLINE (</>) #-}
 
-connect :: Monad m => (b -> c -> d) -> Fold a m b -> Fold a m c -> Fold a m d
-connect f = connectM (pure .* f)
-{-# INLINABLE connect #-}
+(/>) :: Monad m => Fold a m b -> Fold a m c -> Fold a m c
+b /> c = const id <$> b </> c
+{-# INLINE (/>) #-}
 
-connect_ :: Monad m => Fold a m b -> Fold a m c -> Fold a m c
-connect_ = connect (const id)
-{-# INLINABLE connect_ #-}
+(</>>) :: Monad m => Fold a m (b -> m c) -> Fold a m b -> Fold a m c
+(</>>) = kjoin .* (</>)
+{-# INLINE (</>>) #-}
 
-weldM :: Monad m => (b -> c -> m d) -> Fold a m b -> Fold a m c -> Fold a m d
-weldM = combine ($)
-{-# INLINABLE weldM #-}
+(<//>) :: Monad m => Fold a m (b -> c) -> Fold a m b -> Fold a m c
+(<//>) = combine id
+{-# INLINE (<//>) #-}
 
-weld :: Monad m => (b -> c -> d) -> Fold a m b -> Fold a m c -> Fold a m d
-weld f = weldM (pure .* f)
-{-# INLINABLE weld #-}
+(//>) :: Monad m => Fold a m b -> Fold a m c -> Fold a m c
+b //> c = const id <$> b <//> c
+{-# INLINE (//>) #-}
 
-weld_ :: Monad m => Fold a m b -> Fold a m c -> Fold a m c
-weld_ = weld (const id)
-{-# INLINABLE weld_ #-}
+(<//>>) :: Monad m => Fold a m (b -> m c) -> Fold a m b -> Fold a m c
+(<//>>) = kjoin .* (<//>)
+{-# INLINE (<//>>) #-}
 
 spanM :: Monad m => (b -> c -> m d) -> (a -> Bool) -> Fold a m b -> Fold a m c -> Fold a m d
-spanM h p = weldM h . takeWhile p
+spanM h p b c = h <$> takeWhile p b <//>> c
 {-# INLINEABLE spanM #-}
 
 span :: Monad m => (b -> c -> d) -> (a -> Bool) -> Fold a m b -> Fold a m c -> Fold a m d

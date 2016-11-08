@@ -15,5 +15,3 @@ execute ((/) <$> take (10^7) sum <*> take (10^6) genericLength) [1..]
 ```
 
 and it'll stream too.
-
-Gonna complicate the implementation when and if I become confident that it does actually do the right thing.
