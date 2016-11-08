@@ -59,24 +59,10 @@ feed :: Monad m => a -> Fold a m b -> DriveT m (Fold a m b)
 feed x (Fold g f a) = extend (Fold g f) $ a >># flip f x
 {-# INLINEABLE feed #-}
 
-map :: Monad m => (b -> a) -> Fold a m c -> Fold b m c
-map h (Fold g f a) = Fold g (\a -> f a . h) a
-{-# INLINEABLE map #-}
-
-filter :: Monad m => (a -> Bool) -> Fold a m b -> Fold a m b
-filter p (Fold g f a) = Fold g (\a x -> if p x then f a x else more a) a
-{-# INLINABLE filter #-}
-
--- The usual flaw: loses the first element for which the predicate doesn't hold.
-takeWhile :: Monad m => (a -> Bool) -> Fold a m b -> Fold a m b
-takeWhile p (Fold g f a) = Fold g (\a x -> if p x then f a x else pure a) a
-{-# INLINABLE takeWhile #-}
-
-dropWhile :: Monad m => (a -> Bool) -> Fold a m b -> Fold a m b
-dropWhile p (Fold g f a) = Fold (g . sndp) step (Pair False <$> a) where
-  step (Pair b a) x | b || not (p x) = Pair True <$> f a x
-                    | otherwise      = more $ Pair False a
-{-# INLINABLE dropWhile #-}
+{-(<+>) :: Monad m => Fold a m (b -> c) -> Fold a m b -> Fold a m c
+Fold g1 f1 a1 <+> Fold g2 f2 a2 = Fold final step (Pair <$> a1 <*> a2) where
+ ...
+{-# INLINABLE (<+>) #-}-}
 
 combine :: Monad m
         => (forall a. (a -> a) -> a -> a)
@@ -86,7 +72,7 @@ combine c (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
 
   step (Pair3 b a1' a2') x
     | b         = extend (Pair3 True a1') $ a2' >># flip f2 x
-    | otherwise = driveDriveT (\a1'' -> extend (Pair3 True  a1'') $ c (>># flip f2 x) a2')
+    | otherwise = driveDriveT (\a1'' -> extend (Pair3 True a1'') $ c (>># flip f2 x) a2')
                               (\a1'' -> more $ Pair3 False a1'' a2')
                               (f1 a1' x)
 
@@ -116,6 +102,25 @@ b //> c = const id <$> b <//> c
 (<//>>) :: Monad m => Fold a m (b -> m c) -> Fold a m b -> Fold a m c
 (<//>>) = kjoin .* (<//>)
 {-# INLINE (<//>>) #-}
+
+map :: Monad m => (b -> a) -> Fold a m c -> Fold b m c
+map h (Fold g f a) = Fold g (\a -> f a . h) a
+{-# INLINEABLE map #-}
+
+filter :: Monad m => (a -> Bool) -> Fold a m b -> Fold a m b
+filter p (Fold g f a) = Fold g (\a x -> if p x then f a x else more a) a
+{-# INLINABLE filter #-}
+
+-- The usual flaw: loses the first element for which the predicate doesn't hold.
+takeWhile :: Monad m => (a -> Bool) -> Fold a m b -> Fold a m b
+takeWhile p (Fold g f a) = Fold g (\a x -> if p x then f a x else pure a) a
+{-# INLINABLE takeWhile #-}
+
+dropWhile :: Monad m => (a -> Bool) -> Fold a m b -> Fold a m b
+dropWhile p (Fold g f a) = Fold (g . sndp) step (Pair False <$> a) where
+  step (Pair b a) x | b || not (p x) = Pair True <$> f a x
+                    | otherwise      = more $ Pair False a
+{-# INLINABLE dropWhile #-}
 
 spanM :: Monad m => (b -> c -> m d) -> (a -> Bool) -> Fold a m b -> Fold a m c -> Fold a m d
 spanM h p b c = h <$> takeWhile p b <//>> c
@@ -153,19 +158,37 @@ scan (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step (pair a1 a2) where
   final (Pair a1' a2') = runDriveT (cross a1' a2') >>= g2
 {-# INLINEABLE scan #-}
 
+-- `groupBy p f g` groups elements in a list by `p`, then folds each sublist with `f`,
+-- then folds the resulting list with `g`.
 groupBy :: Monad m => (a -> a -> Bool) -> Fold a m b -> Fold b m c -> Fold a m c
 groupBy p (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
-  cross a1' a2' = bindDriveT (runDriveT a1' >>= g1) (f2 a2')
-  
-  acc = Pair3 (const True) a1 <$> a2
+  cross a1' a2' = bindDriveT (runDriveT a1' >>= g1) $ \y -> a2' >># flip f2 y
+
+  acc = extend (Pair4 True (const True) a1) a2
+
+  step (Pair4 _ p' a1' a2') x
+    | p' x      = more $ pair a1' a2'
+    | otherwise = extend (pair a1) $ cross a1' a2'
+    where pair a = Pair4 False (p x) (a >># flip f1 x)
+
+  final (Pair4 b _ a1' a2') = runDriveT (if b then a2' else cross a1' a2') >>= g2
+{-# INLINABLE groupBy #-}
+
+-- Same as `groupBy`, but is slightly more efficient.
+-- The only difference is that this version emulates `Prelude.groupBy b [] = [[]]`.
+groupBy1 :: Monad m => (a -> a -> Bool) -> Fold a m b -> Fold b m c -> Fold a m c
+groupBy1 p (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
+  cross a1' a2' = bindDriveT (runDriveT a1' >>= g1) $ \y -> a2' >># flip f2 y
+
+  acc = extend (Pair3 (const True) a1) a2
 
   step (Pair3 p' a1' a2') x
     | p' x      = more $ pair a1' a2'
-    | otherwise = pair a1 <$> cross a1' a2'
+    | otherwise = extend (pair a1) $ cross a1' a2'
     where pair a = Pair3 (p x) (a >># flip f1 x)
 
-  final (Pair3 p' a1' a2') = runDriveT (cross a1' a2') >>= g2
-{-# INLINABLE groupBy #-}
+  final (Pair3 _ a1' a2') = runDriveT (cross a1' a2') >>= g2
+{-# INLINABLE groupBy1 #-}
 
 group :: (Monad m, Eq a) => Fold a m b -> Fold b m c -> Fold a m c
 group = groupBy (==)

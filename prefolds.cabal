@@ -37,6 +37,7 @@ executable prefolds-exe
   build-depends:
       base
     , prefolds
+    , transformers >= 0.0.0.0
   ghc-options:
       -O2
       -threaded

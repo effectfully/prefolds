@@ -9,7 +9,7 @@ module Lib
     ) where
 
 import Prelude hiding (map, filter, takeWhile, dropWhile, span, take, drop, scan,
-                       groupBy, foldMap, length, sum)
+                       groupBy, foldMap, length, sum, product)
 import Data.Functor.Identity
 import Data.Foldable
 import Data.Traversable
@@ -39,8 +39,9 @@ foldM f a xs = foldr (\x r (!a) -> f a x >># r) more xs a
 
 data Pair a b = Pair !a !b
 
-pattern Pair3 x1 x2 x3    = Pair x1 (Pair x2  x3)
-pattern Pair4 x1 x2 x3 x4 = Pair x1 (Pair x2 (Pair x3 x4))
+pattern Pair3 x1 x2 x3       = Pair x1 (Pair x2  x3)
+pattern Pair4 x1 x2 x3 x4    = Pair x1 (Pair x2 (Pair x3  x4))
+pattern Pair5 x1 x2 x3 x4 x5 = Pair x1 (Pair x2 (Pair x3 (Pair x4 x5)))
 
 instance Functor (Pair a) where
   fmap g (Pair x y) = Pair x (g y)
@@ -79,6 +80,15 @@ instance Monad m => KleisliFunctor m m where
 (<*>>) :: (KleisliFunctor m f, Applicative f) => f (a -> m b) -> f a -> f b
 h <*>> a = kjoin $ h <*> a
 {-# INLINE (<*>>) #-}
+
+-- Write some tests before going wild.
+-- class SumApplicative f where
+--   spure :: a -> f a
+--   (<+>) :: f (a -> b) -> f a -> f b
+
+-- class ChainApplicative f where
+--   cpure :: a -> f a
+--   (</>) :: f (a -> b) -> f a -> f b
 
 -- `more` is emphatically not `pure`, so `More` is unrelated to `Applicative`.
 -- A `More` must satisfy the usual monad laws and
@@ -217,7 +227,7 @@ revert = driveDriveT more pure
 {-# INLINEABLE revert #-}
 
 newtype ZipDriveT m a = ZipDriveT (DriveT m a)
-                      deriving (Functor, Applicative, More, MonadTrans)
+                      deriving (Functor, Applicative, More, MonadTrans, MonadCall)
 
 instance Monad m => Comonad (ZipDriveT m) where
   extract  (ZipDriveT a) = extract a
