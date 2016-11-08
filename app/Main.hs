@@ -68,15 +68,15 @@ test15 = mapM_ print
   ]
 
 test16 :: IO ()
-test16 = executeM (weld_ (takeWhile (<= 5) . map (^2) $ traverse_ print)
-                         (take 3 $ traverse_ print)) [1..]
+test16 = executeM (   (takeWhile (<= 5) . map (^2) $ traverse_ print)
+                   /> (take 3 $ traverse_ print)) [1..]
 
 test17 :: IO ()
-test17 = executeM (connect_ (takeWhile (<= 5) . map (^2) $ traverse_ print)
-                            (take 0 $ traverse_ print)) [1..]
+test17 = executeM (    (takeWhile (<= 5) . map (^2) $ traverse_ print)
+                   //> (take 0 $ traverse_ print)) [1..]
 
 test18 :: IO ()
-test18 = executeM (connect_ (take 0 sum) (take 1 $ traverse_ print)) [1..]
+test18 = executeM (take 0 sum //> take 1 (traverse_ print)) [1..]
 
 -- 140 MB total memory in use.
 fail1 :: IO ()
@@ -90,4 +90,4 @@ nofail1 = print . execute (span (+) (1 ==) sum sum) $ replicate (10^7) (1 :: Int
 test19 :: IO ()
 test19 = executeM (span_ (< 4) (map (^2) $ traverse_ print) (take 5 $ traverse_ print)) [1..]
 
-main = test19
+main = nofail1
