@@ -1,4 +1,5 @@
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, PatternSynonyms, LambdaCase, BangPatterns, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, DefaultSignatures #-}
+{-# LANGUAGE PatternSynonyms, LambdaCase, BangPatterns, GeneralizedNewtypeDeriving #-}
 module Lib
     ( module Lib
     , module Prelude
@@ -19,8 +20,9 @@ import Control.Comonad
 import Control.Monad.Trans.Class
 
 infixr 9 .*, <.>, <.*>
-infixl 4 <$>>, <*>>
-
+infixl 4 <+>, <$>>, <*>>
+infixl 1 >>#
+  
 (.*) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
 g .* f = \x y -> g (f x y)
 {-# INLINE (.*) #-}
@@ -33,8 +35,8 @@ g <.> f = fmap g . f
 g <.*> f = fmap g .* f
 {-# INLINE (<.*>) #-}
 
-foldM :: (Foldable t, More m) => (b -> a -> m b) -> b -> t a -> m b
-foldM f a xs = foldr (\x r (!a) -> f a x >># r) more xs a
+foldM :: (Foldable t, MonoMonad m) => (b -> a -> m b) -> b -> t a -> m b
+foldM f a xs = foldr (\x r (!a) -> f a x >># r) mpure xs a
 {-# INLINABLE foldM #-}
 
 data Pair a b = Pair !a !b
@@ -81,34 +83,22 @@ instance Monad m => KleisliFunctor m m where
   kmap = (=<<)
   {-# INLINE kmap #-}
 
--- Write some tests before going wild.
--- class SumApplicative f where
---   spure :: a -> f a
---   (<+>) :: f (a -> b) -> f a -> f b
+class SumApplicative f where
+  spure :: a -> f a
+  (<+>) :: f (a -> b) -> f a -> f b
 
--- `more` is emphatically not `pure`, so `More` is unrelated to `Applicative`.
--- A `More` must satisfy the usual monad laws and
--- `fmap f (more x) ~ more (f x)`
--- I feel like there should be a law that relates `(>>#)` and `fmap`, is it
--- `fmap g (a >># f) ~ a >># fmap g . f`
--- where `g :: a -> a`?
-class Functor m => More m where
-  infixl 1 >>#
-  more  :: a -> m a
+class Functor m => MonoMonad m where
+  mpure :: a -> m a
+  
+  default mpure :: Applicative m => a -> m a
+  mpure = pure
+  {-# INLINE mpure #-}
+
   (>>#) :: m a -> (a -> m a) -> m a
 
-stop :: (Applicative m, More m) => m a -> m a
-stop a = a >># pure
-{-# INLINEABLE stop #-}
-
-stopWhen :: (Applicative m, More m) => (a -> Bool) -> m a -> m a
-stopWhen p a = a >># \x -> if p x then pure x else more x
-{-# INLINEABLE stopWhen #-}
-
--- `call . more ~ more`
--- `call (a >># f) ~ call a >># call . f`
-class MonadCall t where
-  call :: Monad m => m a -> t m a
+-- Transforms a monad into a monomonad.
+class MonoMonadTrans t where
+  mlift :: Monad m => m a -> t m a
 
 data Drive a = Stop !a | More !a
 
@@ -127,15 +117,23 @@ isStop = drive (const True) (const False)
 
 instance Functor Drive where
   fmap f = drive (Stop . f) (More . f)
-  {-# INLINABLE fmap #-}
+  {-# INLINE fmap #-}
 
 instance Applicative Drive where
-  pure = Stop
-  {-# INLINEABLE pure #-}
+  pure = More
+  {-# INLINE pure #-}
   
-  Stop f <*> Stop x = Stop $ f x
-  f      <*> x      = More $ runDrive f (runDrive x)
+  More f <*> More x = More $ f x
+  f      <*> x      = Stop $ runDrive f (runDrive x)
   {-# INLINEABLE (<*>) #-} 
+
+instance SumApplicative Drive where
+  spure = Stop
+  {-# INLINE spure #-}
+  
+  Stop f <+> Stop x = Stop $ f x
+  f      <+> x      = More $ runDrive f (runDrive x)
+  {-# INLINEABLE (<+>) #-} 
 
 instance Foldable Drive where
   foldMap = foldMapDefault
@@ -147,8 +145,8 @@ instance Traversable Drive where
 
 instance Monad Drive where  
   a >>= f = join $ fmap f a where
-    join (Stop (Stop x)) = Stop x
-    join  a              = More $ runDrive (runDrive a)
+    join (More (More x)) = More x
+    join  a              = Stop $ runDrive (runDrive a)
   {-# INLINABLE (>>=) #-}
 
 instance Comonad Drive where
@@ -185,57 +183,64 @@ isStopT :: Functor f => DriveT f a -> f Bool
 isStopT (DriveT a) = isStop <$> a
 {-# INLINABLE isStopT #-}
 
+-- A few specific synonyms to make things readable.
+halt :: SumApplicative f => a -> f a
+halt = spure
+{-# INLINE halt #-}
+
+more :: MonoMonad m => a -> m a
+more = mpure
+{-# INLINE more #-}
+
+stop :: (MonoMonadTrans t, Monad m) => m a -> t m a
+stop = mlift
+{-# INLINE stop #-}
+
+keep :: (MonadTrans t, Monad m) => m a -> t m a
+keep = lift
+{-# INLINE keep #-}
+
+finish :: (SumApplicative m, MonoMonad m) => m a -> m a
+finish a = a >># halt
+{-# INLINEABLE finish #-}
+
+finishWhen :: (SumApplicative m, MonoMonad m) => (a -> Bool) -> m a -> m a
+finishWhen p a = a >># \x -> if p x then halt x else more x
+{-# INLINEABLE finishWhen #-}
+
 instance Functor f => Functor (DriveT f) where
   fmap f (DriveT a) = DriveT $ fmap (fmap f) a
   {-# INLINEABLE fmap #-}
 
 instance Applicative f => Applicative (DriveT f) where
-  pure = DriveT . pure . Stop
+  pure = DriveT . pure . More
   {-# INLINEABLE pure #-}
   
   DriveT h <*> DriveT a = DriveT $ (<*>) <$> h <*> a
   {-# INLINEABLE (<*>) #-}
 
-instance Monad m => More (DriveT m) where
-  more = DriveT . pure . More
-  {-# INLINEABLE more #-}
+instance Applicative f => SumApplicative (DriveT f) where
+  spure = DriveT . pure . Stop
+  {-# INLINEABLE spure #-}
   
-  a >># f = driveDriveT pure f a
+  DriveT h <+> DriveT a = DriveT $ (<+>) <$> h <*> a
+  {-# INLINEABLE (<+>) #-}
+
+instance Monad m => MonoMonad (DriveT m) where
+  a >># f = driveDriveT halt f a
   {-# INLINABLE (>>#) #-}
 
 instance Monad m => Comonad (DriveT m) where
   extract  = error "there is no `extract` for `DriveT m` unless `m` is a comonad, \
                    \ but this is not needed for `extend`, which is more important than `extract`"
 
-  extend f = driveDriveT (pure . f . pure) (more . f . more)
+  extend f = driveDriveT (halt . f . halt) (more . f . more)
   {-# INLINABLE extend #-}
 
-instance MonadTrans DriveT where
-  lift a = DriveT $ Stop <$> a
+instance MonadTrans     DriveT where
+  lift  a = DriveT $ More <$> a
   {-# INLINEABLE lift #-}
 
-instance MonadCall  DriveT where
-  call a = DriveT $ More <$> a
-  {-# INLINEABLE call #-}
-
-revert :: Monad m => DriveT m a -> DriveT m a
-revert = driveDriveT more pure
-{-# INLINEABLE revert #-}
-
-newtype ZipDriveT m a = ZipDriveT (DriveT m a)
-                      deriving (Functor, Applicative, More, MonadTrans, MonadCall)
-
-instance Monad m => Comonad (ZipDriveT m) where
-  extract  (ZipDriveT a) = extract a
-  {-# INLINABLE extract #-}
-  
-  extend f (ZipDriveT a) = ZipDriveT $ extend (f . ZipDriveT) a
-  {-# INLINABLE extend #-}
-
-toZipDriveT :: Monad m => DriveT m a -> ZipDriveT m a
-toZipDriveT = ZipDriveT . revert
-{-# INLINABLE toZipDriveT #-}
-
-fromZipDriveT :: Monad m => ZipDriveT m a -> DriveT m a
-fromZipDriveT (ZipDriveT a) = revert a
-{-# INLINABLE fromZipDriveT #-}
+instance MonoMonadTrans DriveT where
+  mlift a = DriveT $ Stop <$> a
+  {-# INLINEABLE mlift #-}

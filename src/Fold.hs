@@ -13,16 +13,17 @@ driveFold :: Monad m => (b -> a -> DriveT m b) -> DriveT m b -> Fold a m b
 driveFold = Fold pure
 {-# INLINEABLE driveFold #-}
 
-drivePure :: Monad m => DriveT m b -> Fold a m b
-drivePure = driveFold (pure .* const)
-{-# INLINABLE drivePure #-}
+driveHalt :: Monad m => DriveT m b -> Fold a m b
+driveHalt = driveFold (error "prefolds.driveHalt: something went wrong")
+{-# INLINABLE driveHalt #-}
 
 driveMore :: Monad m => DriveT m b -> Fold a m b
 driveMore = driveFold (more .* const)
 {-# INLINABLE driveMore #-}
 
 instance Monad m => Functor (Fold a m) where
-  -- `fmap h . g` is not strictified, because I'm not sure it's needed.
+  -- `h <.> g` is not strictified, because I'm not sure it's needed.
+  -- The same applies to other instances.
   fmap h (Fold g f a) = Fold (h <.> g) f a
   {-# INLINEABLE fmap #-}
 
@@ -31,25 +32,34 @@ instance Monad m => KleisliFunctor m (Fold a m) where
   {-# INLINEABLE kmap #-}
 
 instance Monad m => Applicative (Fold a m) where
-  pure = drivePure . pure
+  pure = driveMore . pure
   {-# INLINABLE pure #-}
 
-  -- `g` is not strictified for the same reason.
-  Fold g1 f1 a1 <*> Fold g2 f2 a2 = Fold final step (pairW a1 a2) where
-    pairW a1 a2 = Pair <$> duplicate a1 <*> duplicate a2
+  Fold g1 f1 a1 <*> Fold g2 f2 a2 = Fold final step (Pair <$> a1 <*> a2) where
+    step (Pair a1' a2') x = Pair <$> f1 a1' x <*> f2 a2' x
+
+    final (Pair a1' a2') = g1 a1' <*> g2 a2'
+  {-# INLINABLE (<*>) #-}
+
+instance Monad m => SumApplicative (Fold a m) where
+  spure = driveHalt . spure
+  {-# INLINABLE spure #-}
+
+  Fold g1 f1 a1 <+> Fold g2 f2 a2 = Fold final step (pairW a1 a2) where
+    pairW a1 a2 = Pair <$> duplicate a1 <+> duplicate a2
 
     step (Pair a1' a2') x = pairW (a1' >># flip f1 x) (a2' >># flip f2 x)
 
     final (Pair a1' a2') = (runDriveT a1' >>= g1) <*> (runDriveT a2' >>= g2)
-  {-# INLINABLE (<*>) #-}
+  {-# INLINABLE (<+>) #-}
 
-instance MonadTrans (Fold a) where
-  lift = drivePure . lift
+instance MonadTrans     (Fold a) where
+  lift  = driveMore . lift
   {-# INLINABLE lift #-}
 
-instance MonadCall  (Fold a) where
-  call = driveMore . call
-  {-# INLINABLE call #-}
+instance MonoMonadTrans (Fold a) where
+  mlift = driveHalt . mlift
+  {-# INLINABLE mlift #-}
 
 runFold :: Monad m => Fold a m b -> m b
 runFold (Fold g f a) = runDriveT a >>= g
@@ -59,16 +69,11 @@ feed :: Monad m => a -> Fold a m b -> DriveT m (Fold a m b)
 feed x (Fold g f a) = extend (Fold g f) $ a >># flip f x
 {-# INLINEABLE feed #-}
 
-{-(<+>) :: Monad m => Fold a m (b -> c) -> Fold a m b -> Fold a m c
-Fold g1 f1 a1 <+> Fold g2 f2 a2 = Fold final step (Pair <$> a1 <*> a2) where
- ...
-{-# INLINABLE (<+>) #-}-}
-
 combine :: Monad m
         => (forall a. (a -> a) -> a -> a)
         -> Fold a m (b -> c) -> Fold a m b -> Fold a m c
 combine c (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
-  acc = bindDriveT (isStopT a1) $ \b -> Pair3 b <$> a1 <*> duplicate a2
+  acc = bindDriveT (isStopT a1) $ \b -> Pair3 b <$> a1 <+> duplicate a2
 
   step (Pair3 b a1' a2') x
     | b         = extend (Pair3 True a1') $ a2' >># flip f2 x
@@ -113,7 +118,7 @@ filter p (Fold g f a) = Fold g (\a x -> if p x then f a x else more a) a
 
 -- The usual flaw: loses the first element for which the predicate doesn't hold.
 takeWhile :: Monad m => (a -> Bool) -> Fold a m b -> Fold a m b
-takeWhile p (Fold g f a) = Fold g (\a x -> if p x then f a x else pure a) a
+takeWhile p (Fold g f a) = Fold g (\a x -> if p x then f a x else halt a) a
 {-# INLINABLE takeWhile #-}
 
 dropWhile :: Monad m => (a -> Bool) -> Fold a m b -> Fold a m b
@@ -136,9 +141,9 @@ span_ = span (const id)
 
 take :: Monad m => Int -> Fold a m b -> Fold a m b
 take n (Fold g f a) = Fold (g . sndp) step acc where
-  acc = stopWhen ((<= 0) . fstp) $ Pair n <$> a
+  acc = finishWhen ((<= 0) . fstp) $ Pair n <$> a
   step (Pair n a) x | n <= 0    = error "prefolds.take: something went wrong"
-                    | n == 1    = stop $ Pair 0 <$> f a x
+                    | n == 1    = finish $ Pair 0 <$> f a x
                     | otherwise = Pair (n - 1) <$> f a x
 {-# INLINABLE take #-}
   
@@ -150,7 +155,7 @@ drop n (Fold g f a) = Fold (g . sndp) step (Pair n <$> a) where
 
 scan :: Monad m => Fold a m b -> Fold b m c -> Fold a m c
 scan (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step (pair a1 a2) where
-  pair a1 a2 = fromZipDriveT $ Pair <$> toZipDriveT a1 <*> toZipDriveT (duplicate a2)
+  pair a1 a2 = Pair <$> a1 <*> duplicate a2
   cross a1' a2' = bindDriveT (g1 a1') $ \y -> a2' >># flip f2 y
 
   step (Pair a1' a2') x = pair (f1 a1' x) $ cross a1' a2'
@@ -211,7 +216,7 @@ generalize (Pure.Fold g f a) = Fold (pure . g) (more .* f) (more a)
 {-# INLINABLE generalize #-}
 
 foldM :: Monad m => (b -> a -> m b) -> b -> Fold a m b
-foldM f = driveFold (call .* f) . more
+foldM f = driveFold (keep .* f) . more
 {-# INLINABLE foldM #-}
 
 foldMapM :: (Monad m, Monoid b) => (a -> m b) -> Fold a m b

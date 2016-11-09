@@ -141,19 +141,28 @@ behaviour = putStrLn . runSuite $ do
     testGroupBy groupBy1
   label "compose" $ do
     label "parallel" $ do
-      label "sum" $ do
-        return () -- To be implemented.
-      label "product" $ do -- These are sums actually.
+      label "product" $ do
         execute ((,) <$> list        <*> list)        []     === ([],[] :: [Integer])
         execute ((,) <$> list        <*> list)        [1..4] === ([1..4],[1..4])
-        execute ((,) <$> take 3 list <*> list)        [1..4] === ([1..3],[1..4])
-        execute ((,) <$> list        <*> take 3 list) [1..4] === ([1..4],[1..3])
-        execute ((,) <$> take 0 list <*> take 1 list) [1..]  === ([],[1])
-        execute ((,) <$> take 1 list <*> take 0 list) [1..]  === ([1],[])
+        execute ((,) <$> take 3 list <*> list)        [1..4] === ([1..3],[1..3])
+        execute ((,) <$> list        <*> take 3 list) [1..4] === ([1..3],[1..3])
+        execute ((,) <$> take 0 list <*> take 1 list) [1..]  === ([],[])
+        execute ((,) <$> take 1 list <*> take 0 list) [1..]  === ([],[])
         execute ((,) <$> take 1 list <*> take 1 list) [1..]  === ([1],[1])
-        execute ((,) <$> take 3 list <*> take 4 list) [1..]  === ([1..3],[1..4])
-        execute ((,) <$> take 4 list <*> take 3 list) [1..]  === ([1..4],[1..3])
+        execute ((,) <$> take 3 list <*> take 4 list) [1..]  === ([1..3],[1..3])
+        execute ((,) <$> take 4 list <*> take 3 list) [1..]  === ([1..3],[1..3])
         execute ((,) <$> take 4 list <*> take 4 list) [1..]  === ([1..4],[1..4])
+      label "sum" $ do
+        execute ((,) <$> list        <+> list)        []     === ([],[] :: [Integer])
+        execute ((,) <$> list        <+> list)        [1..4] === ([1..4],[1..4])
+        execute ((,) <$> take 3 list <+> list)        [1..4] === ([1..3],[1..4])
+        execute ((,) <$> list        <+> take 3 list) [1..4] === ([1..4],[1..3])
+        execute ((,) <$> take 0 list <+> take 1 list) [1..]  === ([],[1])
+        execute ((,) <$> take 1 list <+> take 0 list) [1..]  === ([1],[])
+        execute ((,) <$> take 1 list <+> take 1 list) [1..]  === ([1],[1])
+        execute ((,) <$> take 3 list <+> take 4 list) [1..]  === ([1..3],[1..4])
+        execute ((,) <$> take 4 list <+> take 3 list) [1..]  === ([1..4],[1..3])
+        execute ((,) <$> take 4 list <+> take 4 list) [1..]  === ([1..4],[1..4])
     label "sequential" $ do
       label "connect" $ do
         execute ((,) <$> list        </> list)        []     === ([],[] :: [Integer])
@@ -177,9 +186,13 @@ behaviour = putStrLn . runSuite $ do
         execute ((,) <$> take 3 list <//> take 4 list) [1..]  === ([1..3],[3..6])
         execute ((,) <$> take 4 list <//> take 3 list) [1..]  === ([1..4],[4..6])
         execute ((,) <$> take 4 list <//> take 4 list) [1..]  === ([1..4],[4..7])
-
-test5 :: IO ()
-test5 = executeM (takeWhile (<= 10) . dropWhile (<= 3) . filter even $ traverse_ print) $ [1..]
+  label "random" $ do
+    perform (takeWhile (< 10) . dropWhile (<= 3) . filter even)    [1..] === [4,6,8]
+    execute ((,) <$> take 4 list <+> (drop 2 . take 4) list)       [1..] === ([1..4],[3..6])
+    perform (filter even . scan sum . take 6 . dropWhile (<= 10))  [1..] === [12,20,30]
+    execute ((,,) <$> take 4 list <+> take 3 list <*> take 2 list) [1..] === ([1..2],[1..2],[1..2])
+    execute ((,,) <$> take 4 list <+> take 3 list <*> take 5 list) [1..] === ([1..4],[1..3],[1..4])
+    execute ((,,) <$> take 4 list <+> take 3 list </> take 2 list) [1..] === ([1..4],[1..3],[5..6])
 
 -- 1.2s elapsed.
 test8 :: IO ()
@@ -187,7 +200,7 @@ test8 = print . getSum $
           execute (take (10^7) . group (foldMap Sum) $ sum) $
             cycle $ replicate 10 1 ++ replicate 10 (2 :: Integer)
 
--- 1.35s elapsed.
+-- 1.3s elapsed.
 test9 :: IO ()
 test9 = print $
           P.sum . P.map (getSum . P.foldMap Sum) . P.group . P.take (10^7) $
