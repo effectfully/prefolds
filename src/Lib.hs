@@ -69,10 +69,6 @@ class (Monad m, Functor f) => KleisliFunctor m f where
   kjoin = kmap id
   {-# INLINE kjoin #-}
 
-instance Monad m => KleisliFunctor m m where
-  kmap = (=<<)
-  {-# INLINE kmap #-}
-
 (<$>>) :: KleisliFunctor m f => (a -> m b) -> f a -> f b
 (<$>>) = kmap
 {-# INLINE (<$>>) #-}
@@ -81,14 +77,14 @@ instance Monad m => KleisliFunctor m m where
 h <*>> a = kjoin $ h <*> a
 {-# INLINE (<*>>) #-}
 
+instance Monad m => KleisliFunctor m m where
+  kmap = (=<<)
+  {-# INLINE kmap #-}
+
 -- Write some tests before going wild.
 -- class SumApplicative f where
 --   spure :: a -> f a
 --   (<+>) :: f (a -> b) -> f a -> f b
-
--- class ChainApplicative f where
---   cpure :: a -> f a
---   (</>) :: f (a -> b) -> f a -> f b
 
 -- `more` is emphatically not `pure`, so `More` is unrelated to `Applicative`.
 -- A `More` must satisfy the usual monad laws and
