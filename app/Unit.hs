@@ -136,6 +136,28 @@ suite = do
       execute (groupBy1 (<) sum  list) [] ===  [0]
       execute (groupBy1 (<) list list) [] === ([[]] :: [[Integer]])
     testGroupBy groupBy1
+  label "inits" $ do
+    label "basic" $ do
+      execute (inits list list) []     === [[] :: [Integer]]
+      execute (inits list list) [1]    === [[],[1]]
+      execute (inits list list) [1..4] === [[],[1],[1,2],[1,2,3],[1,2,3,4]]
+    label "stop" $ do
+      label "finite" $ do
+        execute (inits (take 0 list) (take 0 list)) [1,2] === []
+        execute (inits (take 3 list) (take 0 list)) [1,2] === []
+        execute (inits (take 0 list) (take 1 list)) [1,2] === [[]]
+        execute (inits (take 0 list) (take 4 list)) [1,2] === [[],[],[]]
+        execute (inits (take 2 list) (take 4 list)) [1,2] === [[],[1],[1,2]]
+        execute (inits (take 4 list) (take 4 list)) [1,2] === [[],[1],[1,2]]
+        execute (inits (take 3 list) (take 5 list)) [1,2] === [[],[1],[1,2]]
+      label "infinite" $ do
+        execute (inits (take 0 list) (take 0 list)) [1..] === []
+        execute (inits (take 3 list) (take 0 list)) [1..] === []
+        execute (inits (take 0 list) (take 1 list)) [1..] === [[]]
+        execute (inits (take 0 list) (take 4 list)) [1..] === [[],[],[],[]]
+        execute (inits (take 2 list) (take 4 list)) [1..] === [[],[1],[1,2],[1,2]]
+        execute (inits (take 4 list) (take 4 list)) [1..] === [[],[1],[1,2],[1,2,3]]
+        execute (inits (take 3 list) (take 5 list)) [1..] === [[],[1],[1,2],[1,2,3],[1,2,3]]
   label "compose" $ do
     label "parallel" $ do
       label "product" $ do

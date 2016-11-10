@@ -199,6 +199,17 @@ group :: (Monad m, Eq a) => Fold a m b -> Fold b m c -> Fold a m c
 group = groupBy (==)
 {-# INLINEABLE group #-}
 
+inits :: Monad m => Fold a m b -> Fold b m c -> Fold a m c
+inits (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
+  cross a1' a2' = bindDriveT (runDriveT a1' >>= g1) $ \y -> a2' >># flip f2 y
+
+  acc = extend (Pair a1) a2
+
+  step (Pair a1' a2') x = extend (Pair (a1' >># flip f1 x)) $ cross a1' a2'
+
+  final (Pair a1' a2') = runDriveT (cross a1' a2') >>= g2
+{-# INLINABLE inits #-}
+
 consume :: (Monad m, Foldable t) => Fold a m b -> t a -> DriveT m (Fold a m b)
 consume = Lib.foldM (flip feed)
 {-# INLINABLE consume #-}
