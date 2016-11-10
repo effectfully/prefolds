@@ -59,14 +59,22 @@ benchSlowAverageTake = bgroup "slowAverageTake"
         go 0 n = n
         go m n = go (m - 1) n
 
--- Prefolds versions are nearly equal, Prelude versions are two times faster.
+-- Prelude version is almost two times faster.
+-- Seems like I should change finalizers back to `Drive acc -> m b`.
 benchScan :: Benchmark
 benchScan = bgroup "scan"
+  [ bench "Prefolds.scan" $ whnfFrom1To (execute $ scan sum sum) (10^6)
+  , bench "Prelude.scan"  $ whnfFrom1To (P.sum . P.scanl' (+) 0) (10^6)
+  ]
+
+-- Prefolds versions are nearly equal, Prelude versions are two times faster.
+benchScanTake :: Benchmark
+benchScanTake = bgroup "scanTake"
   [ bench "Prefolds.scan/1" $ whnfFrom1 (\n -> execute $ scan (take n sum) sum)   (10^6-1)
-  , bench "Prefolds.scan/2" $ whnfFrom1 (\n -> execute $ scan sum (take n sum))   (10^6-1)
+  , bench "Prefolds.scan/2" $ whnfFrom1 (\n -> execute $ scan sum (take n sum))   (10^6)
   , bench "Prefolds.scan/3" $ whnfFrom1 (\n -> execute $ take n (scan sum sum))   (10^6-1)
   , bench "Prelude.scan/1"  $ whnfFrom1 (\n -> P.sum . P.scanl' (+) 0 . P.take n) (10^6-1)
-  , bench "Prelude.scan/1"  $ whnfFrom1 (\n -> P.sum . P.take n . P.scanl' (+) 0) (10^6-1)
+  , bench "Prelude.scan/2"  $ whnfFrom1 (\n -> P.sum . P.take n . P.scanl' (+) 0) (10^6)
   ]
 
 -- Prelude version is 10% slower.
@@ -97,6 +105,7 @@ suite =
   , benchAverageTake
   , benchSlowAverageTake
   , benchScan
+  , benchScanTake
   , benchGroup
   , benchInits
   ]
