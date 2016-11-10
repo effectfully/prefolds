@@ -208,7 +208,7 @@ executeM f = runDriveT . consume f >=> runFold
 {-# INLINABLE executeM #-}
 
 execute :: Foldable t => Fold a Identity b -> t a -> b
-execute = runIdentity .* executeM 
+execute = runIdentity .* executeM
 {-# INLINABLE execute #-}
 
 generalize :: Monad m => Pure.Fold a b -> Fold a m b

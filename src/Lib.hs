@@ -20,7 +20,7 @@ import Control.Comonad
 import Control.Monad.Trans.Class
 
 infixr 9 .*, <.>, <.*>
-infixl 4 <+>, <$>>, <*>>
+infixl 4 <+>, <$>>, <*>>, <+>>, +>
 infixl 1 >>#
   
 (.*) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
@@ -61,6 +61,27 @@ sndp :: Pair a b -> b
 sndp (Pair x y) = y
 {-# INLINE sndp #-}
 
+class Functor f => SumApplicative f where
+  spure :: a -> f a
+  (<+>) :: f (a -> b) -> f a -> f b
+
+(+>) :: SumApplicative f => f a -> f b -> f b
+a +> b = const id <$> a <+> b
+{-# INLINE (+>) #-}
+
+class Functor m => MonoMonad m where
+  mpure :: a -> m a
+  
+  default mpure :: Applicative m => a -> m a
+  mpure = pure
+  {-# INLINE mpure #-}
+
+  (>>#) :: m a -> (a -> m a) -> m a
+
+-- Transforms a monad into a monomonad.
+class MonoMonadTrans t where
+  mlift :: Monad m => m a -> t m a
+
 -- A variant of http://elvishjerricco.github.io/2016/10/12/kleisli-functors.html
 class (Monad m, Functor f) => KleisliFunctor m f where
   kmap :: (a -> m b) -> f a -> f b
@@ -79,32 +100,19 @@ class (Monad m, Functor f) => KleisliFunctor m f where
 h <*>> a = kjoin $ h <*> a
 {-# INLINE (<*>>) #-}
 
+(<+>>) :: (KleisliFunctor m f, SumApplicative f) => f (a -> m b) -> f a -> f b
+h <+>> a = kjoin $ h <+> a
+{-# INLINE (<+>>) #-}
+
 instance Monad m => KleisliFunctor m m where
   kmap = (=<<)
   {-# INLINE kmap #-}
 
-class SumApplicative f where
-  spure :: a -> f a
-  (<+>) :: f (a -> b) -> f a -> f b
-
-class Functor m => MonoMonad m where
-  mpure :: a -> m a
-  
-  default mpure :: Applicative m => a -> m a
-  mpure = pure
-  {-# INLINE mpure #-}
-
-  (>>#) :: m a -> (a -> m a) -> m a
-
--- Transforms a monad into a monomonad.
-class MonoMonadTrans t where
-  mlift :: Monad m => m a -> t m a
-
 data Drive a = Stop !a | More !a
 
 drive :: (a -> b) -> (a -> b) -> Drive a -> b
-drive g f (Stop x) = g x
-drive g f (More x) = f x
+drive f g (Stop x) = f x
+drive f g (More x) = g x
 {-# INLINABLE drive #-}
 
 runDrive :: Drive a -> a
