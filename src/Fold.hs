@@ -1,7 +1,10 @@
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, NoImplicitPrelude, RankNTypes, ExistentialQuantification #-}
+{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, RankNTypes, ExistentialQuantification #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 module Fold where
 
 import Lib hiding (foldM, mapAccumLM, scanM)
+import Data.Strict.Pair
+import Data.Strict.Drive
 import qualified Lib
 import qualified Pure
 
@@ -86,27 +89,27 @@ combine c (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
 
 (</>) :: Monad m => Fold a m (b -> c) -> Fold a m b -> Fold a m c
 (</>) = combine (const id)
-{-# INLINE (</>) #-}
+{-# INLINEABLE (</>) #-}
 
 (/>) :: Monad m => Fold a m b -> Fold a m c -> Fold a m c
 b /> c = const id <$> b </> c
-{-# INLINE (/>) #-}
+{-# INLINEABLE (/>) #-}
 
 (</>>) :: Monad m => Fold a m (b -> m c) -> Fold a m b -> Fold a m c
 (</>>) = kjoin .* (</>)
-{-# INLINE (</>>) #-}
+{-# INLINEABLE (</>>) #-}
 
 (<//>) :: Monad m => Fold a m (b -> c) -> Fold a m b -> Fold a m c
 (<//>) = combine id
-{-# INLINE (<//>) #-}
+{-# INLINEABLE (<//>) #-}
 
 (//>) :: Monad m => Fold a m b -> Fold a m c -> Fold a m c
 b //> c = const id <$> b <//> c
-{-# INLINE (//>) #-}
+{-# INLINEABLE (//>) #-}
 
 (<//>>) :: Monad m => Fold a m (b -> m c) -> Fold a m b -> Fold a m c
 (<//>>) = kjoin .* (<//>)
-{-# INLINE (<//>>) #-}
+{-# INLINEABLE (<//>>) #-}
 
 map :: Monad m => (b -> a) -> Fold a m c -> Fold b m c
 map h (Fold g f a) = Fold g (\a -> f a . h) a
@@ -153,6 +156,7 @@ drop n (Fold g f a) = Fold (g . sndp) step (Pair n <$> a) where
                     | otherwise = more $ Pair (n - 1) a
 {-# INLINABLE drop #-}
 
+-- `execute (scan f g) xs` scans `xs` with `f`, then folds the resulting list with `g`.
 scan :: Monad m => Fold a m b -> Fold b m c -> Fold a m c
 scan (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step (pair a1 a2) where
   pair a1 a2 = Pair <$> a1 <*> duplicate a2
@@ -163,8 +167,9 @@ scan (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step (pair a1 a2) where
   final (Pair a1' a2') = runDriveT (cross a1' a2') >>= g2
 {-# INLINEABLE scan #-}
 
--- `groupBy p f g` groups elements in a list by `p`, then folds each sublist with `f`,
+-- `execute (groupBy p f g) xs` groups elements of `xs` by `p`, then folds each sublist with `f`,
 -- then folds the resulting list with `g`.
+-- Unlike the prelude version, `p` must be only transitive and is not required to be symmetric.
 groupBy :: Monad m => (a -> a -> Bool) -> Fold a m b -> Fold b m c -> Fold a m c
 groupBy p (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
   cross a1' a2' = bindDriveT (runDriveT a1' >>= g1) $ \y -> a2' >># flip f2 y
@@ -180,7 +185,7 @@ groupBy p (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
 {-# INLINABLE groupBy #-}
 
 -- Same as `groupBy`, but is slightly more efficient.
--- The only difference is that this version emulates `Prelude.groupBy b [] = [[]]`.
+-- The only difference is that this version emulates `Prelude.groupBy p [] = [[]]`.
 groupBy1 :: Monad m => (a -> a -> Bool) -> Fold a m b -> Fold b m c -> Fold a m c
 groupBy1 p (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
   cross a1' a2' = bindDriveT (runDriveT a1' >>= g1) $ \y -> a2' >># flip f2 y
@@ -199,11 +204,11 @@ group :: (Monad m, Eq a) => Fold a m b -> Fold b m c -> Fold a m c
 group = groupBy (==)
 {-# INLINEABLE group #-}
 
+-- `execute (inits f g) xs` folds "inits" of `xs` with `f` and then folds
+-- the resulting list with `g`.
 inits :: Monad m => Fold a m b -> Fold b m c -> Fold a m c
-inits (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
+inits (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step (extend (Pair a1) a2) where
   cross a1' a2' = bindDriveT (runDriveT a1' >>= g1) $ \y -> a2' >># flip f2 y
-
-  acc = extend (Pair a1) a2
 
   step (Pair a1' a2') x = extend (Pair (a1' >># flip f1 x)) $ cross a1' a2'
 

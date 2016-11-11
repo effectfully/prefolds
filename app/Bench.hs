@@ -8,6 +8,15 @@ import qualified Prelude as P
 import qualified Data.List as P
 import Criterion.Main
 
+-- 140 MB total memory in use.
+fail1 :: IO ()
+fail1 = print . uncurry (\xs ys -> P.sum xs + P.sum ys) . P.span (1 ==) $
+          replicate (10^7) (1 :: Integer)
+
+-- 2 MB total memory in use.
+nofail1 :: IO ()
+nofail1 = print . execute (span (+) (1 ==) sum sum) $ replicate (10^7) (1 :: Integer)
+
 whnfFrom1To :: ([Integer] -> b) -> Integer -> Benchmarkable
 whnfFrom1To f = whnf (f . enumFromTo 1)
 {-# INLINE whnfFrom1To #-}
@@ -60,7 +69,6 @@ benchSlowAverageTake = bgroup "slowAverageTake"
         go m n = go (m - 1) n
 
 -- Prelude version is almost two times faster.
--- Seems like I should change finalizers back to `Drive acc -> m b`.
 benchScan :: Benchmark
 benchScan = bgroup "scan"
   [ bench "Prefolds.scan" $ whnfFrom1To (execute $ scan sum sum) (10^6)

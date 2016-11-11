@@ -1,14 +1,10 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 module Main where
 
-import Lib as P
+import Lib
 import Fold
 import Unit
 import Bench
-import Data.Monoid
-import qualified Prelude as P
-import qualified Data.List as P
-import Criterion.Main
 
 -- Prints
 -- 2
@@ -26,13 +22,4 @@ example = executeM (final <$> sink1 <+> sink2 </> sink3 <*>> total) [1..] where
   total = length -- total number of processed elements is 11, since
                  -- `takeWhile (<= 10)` forced `11` before it stopped.
 
--- 140 MB total memory in use.
-fail1 :: IO ()
-fail1 = print . uncurry (\xs ys -> P.sum xs + P.sum ys) . P.span (1 ==) $
-          replicate (10^7) (1 :: Integer)
-
--- 2 MB total memory in use.
-nofail1 :: IO ()
-nofail1 = print . execute (span (+) (1 ==) sum sum) $ replicate (10^7) (1 :: Integer)
-
-main = benchSuite
+main = checkSuite >> benchSuite
