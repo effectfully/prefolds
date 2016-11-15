@@ -7,6 +7,7 @@ module Lib
   , module Control.Monad
   , module Control.Comonad
   , module Control.Monad.Trans.Class
+  , module Control.Monad.Morph
   ) where
 
 import Prelude hiding (map, filter, takeWhile, dropWhile, span, take, drop, scan, groupBy, inits,
@@ -16,6 +17,7 @@ import Data.Bifunctor
 import Control.Monad (join, (>=>))
 import Control.Comonad
 import Control.Monad.Trans.Class
+import Control.Monad.Morph
 
 infixr 9 .*, <.>, <.*>
 infixl 4 <+>, <$>>, <*>>, <+>>, +>

@@ -24,6 +24,7 @@ library
       base >= 4.7 && < 5
     , comonad
     , transformers
+    , mmorph
   default-language:
       Haskell2010
   GHC-Options:
@@ -38,7 +39,8 @@ executable prefolds-exe
       base
     , prefolds
     , transformers
-    , criterion >= 1.1.4.0
+    , mmorph
+    , criterion
   ghc-options:
       -O2
       -threaded

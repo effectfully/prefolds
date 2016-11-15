@@ -1,4 +1,5 @@
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, RankNTypes, ExistentialQuantification #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses #-}
+{-# LANGUAGE RankNTypes, ExistentialQuantification #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 module Fold where
 
@@ -53,7 +54,7 @@ instance Monad m => SumApplicative (Fold a m) where
 
     step (Pair a1' a2') x = pairW (a1' >># flip f1 x) (a2' >># flip f2 x)
 
-    final (Pair a1' a2') = (runDriveT a1' >>= g1) <*> (runDriveT a2' >>= g2)
+    final (Pair a1' a2') = (a1' >>~ g1) <*> (a2' >>~ g2)
   {-# INLINABLE (<+>) #-}
 
 instance MonadTrans     (Fold a) where
@@ -64,27 +65,31 @@ instance MonoMonadTrans (Fold a) where
   mlift = driveHalt . mlift
   {-# INLINABLE mlift #-}
 
+instance MFunctor (Fold a) where
+  hoist h (Fold g f a) = Fold (h . g) (hoist h .* f) (hoist h a)
+  {-# INLINEABLE hoist #-}
+
 runFold :: Monad m => Fold a m b -> m b
-runFold (Fold g f a) = runDriveT a >>= g
+runFold (Fold g f a) = a >>~ g
 {-# INLINEABLE runFold #-}
 
 feed :: Monad m => a -> Fold a m b -> DriveT m (Fold a m b)
-feed x (Fold g f a) = extend (Fold g f) $ a >># flip f x
+feed x (Fold g f a) = a >># flip f x =>> Fold g f
 {-# INLINEABLE feed #-}
 
 combine :: Monad m
         => (forall a. (a -> a) -> a -> a)
         -> Fold a m (b -> c) -> Fold a m b -> Fold a m c
 combine c (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
-  acc = bindDriveT (isStopT a1) $ \b -> Pair3 b <$> a1 <+> duplicate a2
+  acc = isStopT a1 >>~ \b -> Pair3 b <$> a1 <+> duplicate a2
 
   step (Pair3 b a1' a2') x
-    | b         = extend (Pair3 True a1') $ a2' >># flip f2 x
-    | otherwise = driveDriveT (\a1'' -> extend (Pair3 True a1'') $ c (>># flip f2 x) a2')
+    | b         = a2' >># flip f2 x =>> Pair3 True a1'
+    | otherwise = driveDriveT (\a1'' -> c (>># flip f2 x) a2' =>> Pair3 True a1'')
                               (\a1'' -> more $ Pair3 False a1'' a2')
                               (f1 a1' x)
 
-  final (Pair3 b a1' a2') = g1 a1' <*> (runDriveT a2' >>= g2)
+  final (Pair3 b a1' a2') = g1 a1' <*> (a2' >>~ g2)
 {-# INLINABLE combine #-}
 
 (</>) :: Monad m => Fold a m (b -> c) -> Fold a m b -> Fold a m c
@@ -156,64 +161,71 @@ drop n (Fold g f a) = Fold (g . sndp) step (Pair n <$> a) where
                     | otherwise = more $ Pair (n - 1) a
 {-# INLINABLE drop #-}
 
--- `execute (scan f g) xs` scans `xs` with `f`, then folds the resulting list with `g`.
+cross :: Monad m => m a -> DriveT m b -> (b -> a -> DriveT m b) -> DriveT m b
+cross a b f = a >>~ \x -> b >># flip f x
+{-# INLINABLE cross #-}
+
+-- | `execute (scan f g) xs` scans `xs` with `f`, then folds the resulting list with `g`.
 scan :: Monad m => Fold a m b -> Fold b m c -> Fold a m c
 scan (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step (pair a1 a2) where
   pair a1 a2 = Pair <$> a1 <*> duplicate a2
-  cross a1' a2' = bindDriveT (g1 a1') $ \y -> a2' >># flip f2 y
 
-  step (Pair a1' a2') x = pair (f1 a1' x) $ cross a1' a2'
+  step (Pair a1' a2') x = pair (f1 a1' x) $ cross (g1 a1') a2' f2
 
-  final (Pair a1' a2') = runDriveT (cross a1' a2') >>= g2
+  final (Pair a1' a2') = cross (g1 a1') a2' f2 >>~ g2
 {-# INLINEABLE scan #-}
 
--- `execute (groupBy p f g) xs` groups elements of `xs` by `p`, then folds each sublist with `f`,
+-- | `execute (groupBy p f g) xs` groups elements of `xs` by `p`, then folds each sublist with `f`,
 -- then folds the resulting list with `g`.
 -- Unlike the prelude version, `p` must be only transitive and is not required to be symmetric.
 groupBy :: Monad m => (a -> a -> Bool) -> Fold a m b -> Fold b m c -> Fold a m c
 groupBy p (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
-  cross a1' a2' = bindDriveT (runDriveT a1' >>= g1) $ \y -> a2' >># flip f2 y
-
-  acc = extend (Pair4 True (const True) a1) a2
+  acc = a2 =>> Pair4 False (const True) a1
 
   step (Pair4 _ p' a1' a2') x
     | p' x      = more $ pair a1' a2'
-    | otherwise = extend (pair a1) $ cross a1' a2'
-    where pair a = Pair4 False (p x) (a >># flip f1 x)
+    | otherwise = cross (a1' >>~ g1) a2' f2 =>> pair a1
+    where pair a = Pair4 True (p x) (a >># flip f1 x)
 
-  final (Pair4 b _ a1' a2') = runDriveT (if b then a2' else cross a1' a2') >>= g2
+  final (Pair4 b _ a1' a2') = (if b then cross (a1' >>~ g1) a2' f2 else a2') >>~ g2
 {-# INLINABLE groupBy #-}
 
--- Same as `groupBy`, but is slightly more efficient.
+-- | Same as `groupBy`, but is slightly more efficient.
 -- The only difference is that this version emulates `Prelude.groupBy p [] = [[]]`.
 groupBy1 :: Monad m => (a -> a -> Bool) -> Fold a m b -> Fold b m c -> Fold a m c
 groupBy1 p (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
-  cross a1' a2' = bindDriveT (runDriveT a1' >>= g1) $ \y -> a2' >># flip f2 y
+  acc = a2 =>> Pair3 (const True) a1
 
-  acc = extend (Pair3 (const True) a1) a2
+  step (Pair3 p' a1' a2') x | p' x      = more $ pair a1' a2'
+                            | otherwise = cross (a1' >>~ g1) a2' f2 =>> pair a1
+                            where pair a = Pair3 (p x) (a >># flip f1 x)
 
-  step (Pair3 p' a1' a2') x
-    | p' x      = more $ pair a1' a2'
-    | otherwise = extend (pair a1) $ cross a1' a2'
-    where pair a = Pair3 (p x) (a >># flip f1 x)
-
-  final (Pair3 _ a1' a2') = runDriveT (cross a1' a2') >>= g2
+  final (Pair3 _ a1' a2') = cross (a1' >>~ g1) a2' f2 >>~ g2
 {-# INLINABLE groupBy1 #-}
 
 group :: (Monad m, Eq a) => Fold a m b -> Fold b m c -> Fold a m c
 group = groupBy (==)
 {-# INLINEABLE group #-}
 
--- `execute (inits f g) xs` folds "inits" of `xs` with `f` and then folds
+-- | `execute (inits f g) xs` folds "inits" of `xs` with `f` and then folds
 -- the resulting list with `g`.
 inits :: Monad m => Fold a m b -> Fold b m c -> Fold a m c
-inits (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step (extend (Pair a1) a2) where
-  cross a1' a2' = bindDriveT (runDriveT a1' >>= g1) $ \y -> a2' >># flip f2 y
+inits (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step (a2 =>> Pair a1) where
+  step (Pair a1' a2') x = cross (a1' >>~ g1) a2' f2 =>> Pair (a1' >># flip f1 x)
 
-  step (Pair a1' a2') x = extend (Pair (a1' >># flip f1 x)) $ cross a1' a2'
-
-  final (Pair a1' a2') = runDriveT (cross a1' a2') >>= g2
+  final (Pair a1' a2') = cross (a1' >>~ g1) a2' f2 >>~ g2
 {-# INLINABLE inits #-}
+
+chunks :: Monad m => Fold a m b -> Fold b m c -> Fold a m c
+chunks (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step (init a2) where
+  init a2' = Pair3 False <$> a1 <*> duplicate a2'
+
+  step (Pair3 _ a1' a2') x = driveDriveT (\a1'' -> init $ cross (g1 a1'') a2' f2)
+                                         (\a1'' -> more $ Pair3 True a1'' a2')
+                                         (f1 a1' x)
+
+  final (Pair3 b a1' a2') = (if b then cross (g1 a1') a2' f2 else a2') >>~ g2
+{-# INLINABLE chunks #-}
 
 consume :: (Monad m, Foldable t) => Fold a m b -> t a -> DriveT m (Fold a m b)
 consume = Lib.foldM (flip feed)
@@ -227,9 +239,9 @@ execute :: Foldable t => Fold a Identity b -> t a -> b
 execute = runIdentity .* executeM
 {-# INLINABLE execute #-}
 
-generalize :: Monad m => Pure.Fold a b -> Fold a m b
-generalize (Pure.Fold g f a) = Fold (pure . g) (more .* f) (more a)
-{-# INLINABLE generalize #-}
+fromPure :: Monad m => Pure.Fold a b -> Fold a m b
+fromPure (Pure.Fold g f a) = Fold (pure . g) (more .* f) (more a)
+{-# INLINABLE fromPure #-}
 
 foldM :: Monad m => (b -> a -> m b) -> b -> Fold a m b
 foldM f = driveFold (keep .* f) . more
@@ -244,65 +256,65 @@ traverse_ f = foldM (const f) ()
 {-# INLINABLE traverse_ #-}
 
 fold  :: Monad m => (b -> a -> b) -> b -> Fold a m b
-fold = generalize .* Pure.fold
+fold = fromPure .* Pure.fold
 {-# INLINABLE fold #-}
 
 list :: Monad m => Fold a m [a]
-list = generalize Pure.list
+list = fromPure Pure.list
 {-# INLINABLE list #-}
 
 revList :: Monad m => Fold a m [a]
-revList = generalize Pure.revList
+revList = fromPure Pure.revList
 {-# INLINABLE revList #-}
 
 foldMap :: (Monad m, Monoid b) => (a -> b) -> Fold a m b
-foldMap = generalize . Pure.foldMap
+foldMap = fromPure . Pure.foldMap
 {-# INLINABLE foldMap #-}
 
 mconcat :: (Monad m, Monoid a) => Fold a m a
-mconcat = generalize Pure.mconcat
+mconcat = fromPure Pure.mconcat
 {-# INLINABLE mconcat #-}
 
 null :: (Monad m, Num a) => Fold a m Bool
-null = generalize Pure.null
+null = fromPure Pure.null
 {-# INLINABLE null #-}
 
 length :: Monad m => Fold a m Int
-length = generalize Pure.length
+length = fromPure Pure.length
 {-# INLINABLE length #-}
 
 and :: Monad m => Fold Bool m Bool
-and = generalize Pure.and
+and = fromPure Pure.and
 {-# INLINEABLE and #-}
 
 or :: Monad m => Fold Bool m Bool
-or = generalize Pure.or
+or = fromPure Pure.or
 {-# INLINEABLE or #-}
 
 all :: Monad m => (a -> Bool) -> Fold a m Bool
-all = generalize . Pure.all
+all = fromPure . Pure.all
 {-# INLINEABLE all #-}
 
 any :: Monad m => (a -> Bool) -> Fold a m Bool
-any = generalize . Pure.any
+any = fromPure . Pure.any
 {-# INLINEABLE any #-}
 
 sum :: (Monad m, Num a) => Fold a m a
-sum = generalize Pure.sum
+sum = fromPure Pure.sum
 {-# INLINABLE sum #-}
 
 product :: (Monad m, Num a) => Fold a m a
-product = generalize Pure.product
+product = fromPure Pure.product
 {-# INLINABLE product #-}
 
 elem :: (Monad m, Eq a) => a -> Fold a m Bool
-elem = generalize . Pure.elem
+elem = fromPure . Pure.elem
 {-# INLINABLE elem #-}
 
 notElem :: (Monad m, Eq a) => a -> Fold a m Bool
-notElem = generalize . Pure.notElem
+notElem = fromPure . Pure.notElem
 {-# INLINABLE notElem #-}
 
 genericLength :: (Monad m, Num b) => Fold a m b
-genericLength = generalize Pure.genericLength
+genericLength = fromPure Pure.genericLength
 {-# INLINABLE genericLength #-}

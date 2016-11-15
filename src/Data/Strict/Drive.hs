@@ -1,8 +1,18 @@
+{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, RankNTypes #-}
 module Data.Strict.Drive where
 
 import Lib
 
 import Data.Traversable (foldMapDefault)
+
+infixl 1 >>~, >~>
+
+class Absorb f g where
+  (>>~) :: f a -> (a -> g b) -> g b
+
+(>~>) :: Absorb f g => (a -> f b) -> (b -> g c) -> a -> g c
+f >~> g = \x -> f x >>~ g
+{-# INLINE (>~>) #-}
 
 data Drive a = Stop !a | More !a
 
@@ -79,12 +89,8 @@ runDriveT :: Functor f => DriveT f a -> f a
 runDriveT (DriveT a) = runDrive <$> a
 {-# INLINEABLE runDriveT #-}
 
-bindDriveT :: Monad m => m a -> (a -> DriveT m b) -> DriveT m b
-bindDriveT a f = DriveT $ a >>= getDriveT . f
-{-# INLINABLE bindDriveT #-}
-
 driveDriveT :: Monad m => (a -> DriveT m b) -> (a -> DriveT m b) -> DriveT m a -> DriveT m b
-driveDriveT f g (DriveT a) = bindDriveT a $ drive f g
+driveDriveT f g (DriveT a) = a >>~ drive f g
 {-# INLINABLE driveDriveT #-}
 
 isStopT :: Functor f => DriveT f a -> f Bool
@@ -156,3 +162,15 @@ instance MonadTrans     DriveT where
 instance MonoMonadTrans DriveT where
   mlift a = DriveT $ Stop <$> a
   {-# INLINEABLE mlift #-}
+
+instance MFunctor DriveT where
+  hoist h (DriveT a) = DriveT $ h a
+  {-# INLINEABLE hoist#-}
+
+instance Monad m => Absorb (DriveT m) m where
+  a >>~ f = runDriveT a >>= f
+  {-# INLINEABLE (>>~) #-}
+
+instance Monad m => Absorb m (DriveT m) where
+  a >>~ f = DriveT $ a >>= getDriveT . f
+  {-# INLINEABLE (>>~) #-}

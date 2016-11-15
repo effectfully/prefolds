@@ -158,6 +158,24 @@ suite = do
         execute (inits (take 2 list) (take 4 list)) [1..] === [[],[1],[1,2],[1,2]]
         execute (inits (take 4 list) (take 4 list)) [1..] === [[],[1],[1,2],[1,2,3]]
         execute (inits (take 3 list) (take 5 list)) [1..] === [[],[1],[1,2],[1,2,3],[1,2,3]]
+  label "chunks" $ do
+    label "degenerate" $ do
+      execute (chunks list list) []     === ([] :: [[Integer]])
+      execute (chunks list list) [1]    === [[1]]
+      execute (chunks list list) [1..4] === [[1..4]]
+    label "basic" $ do
+      label "degenerate" $ do
+        execute (chunks (take 0 list) list) []     === ([] :: [[Integer]])
+        execute (chunks (take 0 list) list) [1]    === ([] :: [[Integer]])
+        execute (chunks (take 0 list) list) [1..4] === ([] :: [[Integer]])
+      label "basic" $ do
+        execute (chunks (take 1 list) list) []     === ([] :: [[Integer]])
+        execute (chunks (take 1 list) list) [1]    === [[1]]
+        execute (chunks (take 1 list) list) [1..4] === [[1],[2],[3],[4]]
+        execute (chunks (take 3 list) list) [1]    === [[1]]
+        execute (chunks (take 3 list) list) [1..4] === [[1,2,3],[4]]
+        execute (chunks (take 3 list) list) [1..5] === [[1,2,3],[4,5]]
+        execute (chunks (take 3 list) list) [1..6] === [[1,2,3],[4,5,6]]
   label "compose" $ do
     label "parallel" $ do
       label "product" $ do
