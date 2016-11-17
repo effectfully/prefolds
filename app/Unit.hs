@@ -7,6 +7,8 @@ import qualified Prelude as P
 import qualified Data.List as P
 import Control.Monad.Trans.Writer
 
+-- I didn't find a lib that allows to not name each single test,
+-- so here is a tiny implementation.
 data Test = forall a. (Show a, Eq a) => a :== a
           | Label String [Test]
 
@@ -33,6 +35,8 @@ x === y = tell [x :== y]
 perform :: (Fold a Identity [a] -> Fold a Identity b) -> [a] -> b
 perform f = execute (f list)
 
+-- It's really easy to make an off-by-one error with functions like `scan` and `groupBy`,
+-- hence the tests mostly cover such cases.
 suite :: Suite
 suite = do
   label "map"  $ do

@@ -92,12 +92,14 @@ instance SumApplicative Drive where
 
 `SumApplicative` has the same methods and laws as `Applicative` except methods are named differently. There are corresponding `Monad` and `SumMonad` instances, but they don't allow to terminate execution early (like with `Either`), because, well, how would you define `Stop x >>= f = Stop x` if `f :: a -> m b` when you're supposed to return `m b` and you have `Stop x :: m a`? So there is another type class:
 
+```
 class Functor m => MonoMonad m where
   mpure :: a -> m a
   default mpure :: Applicative m => a -> m a
   mpure = pure
 
   (>>#) :: m a -> (a -> m a) -> m a
+```
 
 With this we can define
 
