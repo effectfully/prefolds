@@ -6,7 +6,6 @@ module Lib
   , module Data.Bifunctor
   , module Control.Monad
   , module Control.Comonad
-  , module Control.Monad.Trans.Class
   , module Control.Monad.Morph
   ) where
 
@@ -16,8 +15,7 @@ import Data.Functor.Identity
 import Data.Bifunctor
 import Control.Monad (join, (>=>))
 import Control.Comonad
-import Control.Monad.Trans.Class
-import Control.Monad.Morph
+import Control.Monad.Morph (MFunctor, hoist)
 
 infixr 9 .*, <.>, <.*>
 infixl 4 <+>, <$>>, <*>>, <+>>, +>
@@ -35,9 +33,17 @@ g <.> f = fmap g . f
 g <.*> f = fmap g .* f
 {-# INLINE (<.*>) #-}
 
-foldM :: (Foldable t, MonoMonad m) => (b -> a -> m b) -> b -> t a -> m b
-foldM f a xs = foldr (\x r (!a) -> f a x >># r) mpure xs a
+runEither :: Either a a -> a
+runEither = either id id
+{-# INLINE runEither #-}
+
+foldM :: (Foldable t, Monad m) => (b -> a -> m b) -> b -> t a -> m b
+foldM f a xs = foldr (\x r (!a) -> f a x >>= r) return xs a
 {-# INLINE foldM #-}
+
+mfoldM :: (Foldable t, MonoMonad m) => (b -> a -> m b) -> b -> t a -> m b
+mfoldM f a xs = foldr (\x r (!a) -> f a x >># r) mpure xs a
+{-# INLINE mfoldM #-}
 
 class Functor f => SumApplicative f where
   spure :: a -> f a
@@ -47,18 +53,30 @@ class Functor f => SumApplicative f where
 a +> b = const id <$> a <+> b
 {-# INLINE (+>) #-}
 
+class SumApplicative m => SumMonad m where
+  (>>+) :: m a -> (a -> m b) -> m b
+  a >>+ f = sjoin $ fmap f a
+  {-# INLINE (>>+) #-}
+
+  sjoin :: m (m a) -> m a
+  sjoin a = a >>+ id
+  {-# INLINE sjoin #-}
+
 class Functor m => MonoMonad m where
   mpure :: a -> m a
-  
   default mpure :: Applicative m => a -> m a
   mpure = pure
   {-# INLINE mpure #-}
 
   (>>#) :: m a -> (a -> m a) -> m a
 
--- Transforms a monad into a monomonad.
+-- Transforms a Monad into a MonoMonad.
 class MonoMonadTrans t where
   mlift :: Monad m => m a -> t m a
+
+-- Transforms a Monad into a SumMonad.
+class SumMonadTrans t where
+  slift :: Monad m => m a -> t m a
 
 -- A variant of http://elvishjerricco.github.io/2016/10/12/kleisli-functors.html
 class (Monad m, Functor f) => KleisliFunctor m f where

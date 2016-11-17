@@ -4,6 +4,7 @@ module Data.Strict.Drive where
 import Lib
 
 import Data.Traversable (foldMapDefault)
+import Control.Monad.Trans.Except (ExceptT(..))
 
 infixl 1 >>~, >~>
 
@@ -33,6 +34,10 @@ isMore :: Drive a -> Bool
 isMore = drive (const False) (const True)
 {-# INLINABLE isMore #-}
 
+driveToEither :: Drive a -> Either a a
+driveToEither = drive Left Right
+{-# INLINABLE driveToEither #-}
+
 instance Functor Drive where
   fmap f = drive (Stop . f) (More . f)
   {-# INLINEABLE fmap #-}
@@ -43,7 +48,7 @@ instance Applicative Drive where
   
   More f <*> More x = More $ f x
   f      <*> x      = Stop $ runDrive f (runDrive x)
-  {-# INLINEABLE (<*>) #-} 
+  {-# INLINEABLE (<*>) #-}
 
 instance SumApplicative Drive where
   spure = Stop
@@ -51,7 +56,7 @@ instance SumApplicative Drive where
   
   Stop f <+> Stop x = Stop $ f x
   f      <+> x      = More $ runDrive f (runDrive x)
-  {-# INLINEABLE (<+>) #-} 
+  {-# INLINEABLE (<+>) #-}
 
 instance Foldable Drive where
   foldMap = foldMapDefault
@@ -61,11 +66,21 @@ instance Traversable Drive where
   traverse f = drive (Stop <.> f) (More <.> f)
   {-# INLINEABLE traverse #-}
 
+instance MonoMonad Drive where  
+  a >># f = drive Stop f a
+  {-# INLINABLE (>>#) #-}
+
 instance Monad Drive where  
   a >>= f = join $ fmap f a where
     join (More (More x)) = More x
     join  a              = Stop $ runDrive (runDrive a)
   {-# INLINABLE (>>=) #-}
+
+instance SumMonad Drive where  
+  a >>+ f = join $ fmap f a where
+    join (Stop (Stop x)) = Stop x
+    join  a              = More $ runDrive (runDrive a)
+  {-# INLINABLE (>>+) #-}
 
 instance Comonad Drive where
   extract = runDrive
@@ -101,6 +116,10 @@ isMoreT :: Functor f => DriveT f a -> f Bool
 isMoreT (DriveT a) = isMore <$> a
 {-# INLINABLE isMoreT #-}
 
+driveToExceptT :: Monad m => DriveT m a -> ExceptT a m a
+driveToExceptT (DriveT a) = ExceptT $ driveToEither <$> a
+{-# INLINABLE driveToExceptT #-}
+
 -- A few synonyms to make things readable.
 halt :: SumApplicative f => a -> f a
 halt = spure
@@ -110,12 +129,12 @@ more :: MonoMonad m => a -> m a
 more = mpure
 {-# INLINEABLE more #-}
 
-stop :: (MonoMonadTrans t, Monad m) => m a -> t m a
-stop = mlift
+stop :: (SumMonadTrans t, Monad m) => m a -> t m a
+stop = slift
 {-# INLINEABLE stop #-}
 
-keep :: (MonadTrans t, Monad m) => m a -> t m a
-keep = lift
+keep :: (MonoMonadTrans t, Monad m) => m a -> t m a
+keep = mlift
 {-# INLINEABLE keep #-}
 
 finish :: (SumApplicative m, MonoMonad m) => m a -> m a
@@ -148,6 +167,14 @@ instance Monad m => MonoMonad (DriveT m) where
   a >># f = driveDriveT halt f a
   {-# INLINABLE (>>#) #-}
 
+instance Monad m => Monad (DriveT m) where
+  DriveT a >>= f = DriveT . fmap  join . join $ traverse (getDriveT . f) <$> a
+  {-# INLINABLE (>>=) #-}
+
+instance Monad m => SumMonad (DriveT m) where
+  DriveT a >>+ f = DriveT . fmap sjoin . join $ traverse (getDriveT . f) <$> a
+  {-# INLINABLE (>>+) #-}
+
 instance Monad m => Comonad (DriveT m) where
   extract  = error "there is no `extract` for `DriveT m` unless `m` is a comonad, \
                    \ but this is not needed for `extend`, which is more important than `extract`"
@@ -155,13 +182,13 @@ instance Monad m => Comonad (DriveT m) where
   extend f = driveDriveT (halt . f . halt) (more . f . more)
   {-# INLINABLE extend #-}
 
-instance MonadTrans     DriveT where
-  lift  a = DriveT $ More <$> a
-  {-# INLINEABLE lift #-}
-
 instance MonoMonadTrans DriveT where
-  mlift a = DriveT $ Stop <$> a
+  mlift a = DriveT $ More <$> a
   {-# INLINEABLE mlift #-}
+
+instance SumMonadTrans  DriveT where
+  slift a = DriveT $ Stop <$> a
+  {-# INLINEABLE slift #-}
 
 instance MFunctor DriveT where
   hoist h (DriveT a) = DriveT $ h a

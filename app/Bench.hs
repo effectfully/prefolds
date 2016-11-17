@@ -44,18 +44,20 @@ benchAverage = bgroup "average"
 -- Prelude version is more than two times faster.
 benchAverageTake :: Benchmark
 benchAverageTake = bgroup "averageTake"
-  [ bench "Prefolds" $ whnf  average (10^7)
-  , bench "Prelude"  $ whnf paverage (10^7)
+  [ bench "Prefolds/Mul" $ whnf average  (10^7)
+  , bench "Prefolds/Sum" $ whnf average' (10^7) -- Note that this doesn't do the same job as others.
+  , bench "Prelude"      $ whnf paverage (10^7)
   ] where
       average  n = execute ((/) <$> take n sum <*> take n genericLength) [n `seq` 1..]
+      average' n = execute ((/) <$> take n sum <+> take n genericLength) [n `seq` 1..]
       paverage n = P.sum (P.take n [n `seq` 1..])
                  / fromIntegral (P.length $ P.take n [n `seq` 1..])
 
--- All are equal (I expected `Prefolds/Sum` to be slower).
+-- All are equal.
 benchSlowAverageTake :: Benchmark
 benchSlowAverageTake = bgroup "slowAverageTake"
   [ bench "Prefolds/Mul" $ whnf average  (10^4)
-  , bench "Prefolds/Sum" $ whnf average' (10^4)
+  , bench "Prefolds/Sum" $ whnf average' (10^4) -- Note that this doesn't do the same job as others.
   , bench "Prelude"      $ whnf paverage (10^4)
   ] where
       average  n = execute ((/) <$> map slowId (take n sum) <*> take n genericLength) [n `seq` 1..]

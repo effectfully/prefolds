@@ -8,6 +8,7 @@ import Data.Strict.Pair
 import Data.Strict.Drive
 import qualified Lib
 import qualified Pure
+import Control.Monad.Trans.Except (runExceptT)
 
 infixl 4 </>, />, </>>, <//>, //>, <//>>
 
@@ -57,13 +58,13 @@ instance Monad m => SumApplicative (Fold a m) where
     final (Pair a1' a2') = (a1' >>~ g1) <*> (a2' >>~ g2)
   {-# INLINABLE (<+>) #-}
 
-instance MonadTrans     (Fold a) where
-  lift  = driveMore . lift
-  {-# INLINABLE lift #-}
-
 instance MonoMonadTrans (Fold a) where
   mlift = driveHalt . mlift
   {-# INLINABLE mlift #-}
+
+instance SumMonadTrans  (Fold a) where
+  slift = driveMore . slift
+  {-# INLINABLE slift #-}
 
 instance MFunctor (Fold a) where
   hoist h (Fold g f a) = Fold (h . g) (hoist h .* f) (hoist h a)
@@ -165,7 +166,6 @@ cross :: Monad m => m a -> DriveT m b -> (b -> a -> DriveT m b) -> DriveT m b
 cross a b f = a >>~ \x -> b >># flip f x
 {-# INLINABLE cross #-}
 
--- | `execute (scan f g) xs` scans `xs` with `f`, then folds the resulting list with `g`.
 scan :: Monad m => Fold a m b -> Fold b m c -> Fold a m c
 scan (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step (pair a1 a2) where
   pair a1 a2 = Pair <$> a1 <*> duplicate a2
@@ -175,8 +175,6 @@ scan (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step (pair a1 a2) where
   final (Pair a1' a2') = cross (g1 a1') a2' f2 >>~ g2
 {-# INLINEABLE scan #-}
 
--- | `execute (groupBy p f g) xs` groups elements of `xs` by `p`, then folds each sublist with `f`,
--- then folds the resulting list with `g`.
 -- Unlike the prelude version, `p` must be only transitive and is not required to be symmetric.
 groupBy :: Monad m => (a -> a -> Bool) -> Fold a m b -> Fold b m c -> Fold a m c
 groupBy p (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
@@ -190,7 +188,7 @@ groupBy p (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
   final (Pair4 b _ a1' a2') = (if b then cross (a1' >>~ g1) a2' f2 else a2') >>~ g2
 {-# INLINABLE groupBy #-}
 
--- | Same as `groupBy`, but is slightly more efficient.
+-- Same as `groupBy`, but is slightly more efficient.
 -- The only difference is that this version emulates `Prelude.groupBy p [] = [[]]`.
 groupBy1 :: Monad m => (a -> a -> Bool) -> Fold a m b -> Fold b m c -> Fold a m c
 groupBy1 p (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
@@ -207,8 +205,6 @@ group :: (Monad m, Eq a) => Fold a m b -> Fold b m c -> Fold a m c
 group = groupBy (==)
 {-# INLINEABLE group #-}
 
--- | `execute (inits f g) xs` folds "inits" of `xs` with `f` and then folds
--- the resulting list with `g`.
 inits :: Monad m => Fold a m b -> Fold b m c -> Fold a m c
 inits (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step (a2 =>> Pair a1) where
   step (Pair a1' a2') x = cross (a1' >>~ g1) a2' f2 =>> Pair (a1' >># flip f1 x)
@@ -228,11 +224,12 @@ chunks (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step (init a2) where
 {-# INLINABLE chunks #-}
 
 consume :: (Monad m, Foldable t) => Fold a m b -> t a -> DriveT m (Fold a m b)
-consume = Lib.foldM (flip feed)
+consume = mfoldM (flip feed)
 {-# INLINABLE consume #-}
 
+-- executeM f = runExceptT . Lib.foldM (driveToExceptT .* flip feed) f >=> runFold . runEither
 executeM :: (Monad m, Foldable t) => Fold a m b -> t a -> m b
-executeM f = runDriveT . consume f >=> runFold
+executeM f = consume f >~> runFold
 {-# INLINABLE executeM #-}
 
 execute :: Foldable t => Fold a Identity b -> t a -> b
