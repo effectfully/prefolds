@@ -1,6 +1,6 @@
 # prefolds
 
-## Quick taste
+## A quick taste
 
 With [`Control.Foldl`](https://hackage.haskell.org/package/foldl-1.2.1/docs/Control-Foldl.html) you can write
 
@@ -16,7 +16,13 @@ With `prefolds` you can write
 execute ((/) <$> take (10^6) sum <*> take (10^6) genericLength) [1..]
 ```
 
-and it'll stream too. There are multiple ways to compose folds:
+and it'll stream too.
+
+With `Control.Foldl` `fold null [1..10^6]` will traverse the entire lists. With `prefolds` the following holds: `execute null (1:undefined) ≡ False`.
+
+## Overview
+
+There are multiple ways to compose folds:
 
  1. `f <+> g` reads as "consume a stream by `f` and `g` in parallel, stop when both folds are saturated and apply the result of `f` to the result of `g`".
  2. `f <*> g` reads as "consume a stream by `f` and `g` in parallel, stop when either fold is saturated and apply the result of `f` to the result of `g`". That's what `Control.Foldl` has.
@@ -41,7 +47,7 @@ example = executeM (final <$> sink1 <+> sink2 </> sink3 <*>> total) [1..] where
   final x y zs n = print [x,y] >> print zs >> print n
   sink1 = take 4 $ map succ product                     -- 2 * 3 * 4 * 5 = 120
   sink2 = take 6 . filter even $ traverse_ print *> sum -- 2 + 4 + 6 = 12
-  sink3 = takeWhile (<= 10) list                        -- [7,8,9,10] (its length is 4)
+  sink3 = takeWhile (<= 10) list                        -- [7,8,9,10]
   total = length -- total number of processed elements is 11, since
                  -- `takeWhile (<= 10)` forced `11` before it stopped.
 ```
@@ -90,7 +96,7 @@ instance SumApplicative Drive where
   f      <+> x      = More $ runDrive f (runDrive x)
 ```
 
-`SumApplicative` has the same methods and laws as `Applicative` except methods are named differently. There are corresponding `Monad` and `SumMonad` instances, but they don't allow to terminate execution early (like with `Either`), because, well, how would you define `Stop x >>= f = Stop x` if `f :: a -> m b` when you're supposed to return `m b` and you have `Stop x :: m a`? So there is another type class:
+`SumApplicative` has the same methods and laws as `Applicative` except methods are named differently. There are corresponding `Monad` and `SumMonad` instances, but they don't allow to terminate execution early (like with `Either`), because, well, how would you define `Stop x >>= f = Stop x` if `f :: a -> m b` when you're supposed to return `m b` when you have `Stop x :: m a`? So there is another type class:
 
 ```
 class Functor m => MonoMonad m where

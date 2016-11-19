@@ -12,3 +12,7 @@ strict  Nothing = Nothing'
 strict (Just a) = Just' a
 {-# INLINABLE strict #-}
 
+maybe' :: b -> (a -> b) -> Maybe' a -> b
+maybe' y f  Nothing' = y
+maybe' y f (Just' x) = f x
+{-# INLINABLE maybe' #-}

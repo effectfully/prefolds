@@ -96,6 +96,10 @@ sequenceBi = drive (bimap Stop Stop) (bimap More More)
 
 newtype DriveT m a = DriveT { getDriveT :: m (Drive a) }
 
+driveToDriveT :: Applicative f => Drive a -> DriveT f a
+driveToDriveT = DriveT . pure
+{-# INLINEABLE driveToDriveT #-}
+
 driveT :: Functor f => (a -> b) -> (a -> b) -> DriveT f a -> f b
 driveT g f (DriveT a) = drive g f <$> a
 {-# INLINEABLE driveT #-}
@@ -120,7 +124,7 @@ driveToExceptT :: Monad m => DriveT m a -> ExceptT a m a
 driveToExceptT (DriveT a) = ExceptT $ driveToEither <$> a
 {-# INLINABLE driveToExceptT #-}
 
--- A few synonyms to make things readable.
+-- A few slightly asymmetric synonyms to make things readable.
 halt :: SumApplicative f => a -> f a
 halt = spure
 {-# INLINEABLE halt #-}
@@ -128,6 +132,14 @@ halt = spure
 more :: MonoMonad m => a -> m a
 more = mpure
 {-# INLINEABLE more #-}
+
+haltWhen :: (SumApplicative m, MonoMonad m) => (a -> Bool) -> a -> m a
+haltWhen p x = if p x then halt x else more x
+{-# INLINEABLE haltWhen #-}
+
+moreWhen :: (SumApplicative m, MonoMonad m) => (a -> Bool) -> a -> m a
+moreWhen p x = if p x then more x else halt x
+{-# INLINEABLE moreWhen #-}
 
 stop :: (SumMonadTrans t, Monad m) => m a -> t m a
 stop = slift
@@ -137,13 +149,13 @@ keep :: (MonoMonadTrans t, Monad m) => m a -> t m a
 keep = mlift
 {-# INLINEABLE keep #-}
 
-finish :: (SumApplicative m, MonoMonad m) => m a -> m a
-finish a = a >># halt
-{-# INLINEABLE finish #-}
+terminate :: (SumApplicative m, MonoMonad m) => m a -> m a
+terminate a = a >># halt
+{-# INLINEABLE terminate #-}
 
-finishWhen :: (SumApplicative m, MonoMonad m) => (a -> Bool) -> m a -> m a
-finishWhen p a = a >># \x -> if p x then halt x else more x
-{-# INLINEABLE finishWhen #-}
+terminateWhen :: (SumApplicative m, MonoMonad m) => (a -> Bool) -> m a -> m a
+terminateWhen p a = a >># \x -> if p x then halt x else more x
+{-# INLINEABLE terminateWhen #-}
 
 instance Functor f => Functor (DriveT f) where
   fmap f (DriveT a) = DriveT $ fmap (fmap f) a

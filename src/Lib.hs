@@ -10,7 +10,8 @@ module Lib
   ) where
 
 import Prelude hiding (map, filter, takeWhile, dropWhile, span, take, drop, scan, groupBy, inits,
-                       foldMap, length, sum, product)
+                       foldMap, mconcat, null, length, all, any, and, or, sum, product,
+                       genericLength, head, last, minimum, maximum, minimumBy, maximumBy)
 import Data.Functor.Identity
 import Data.Bifunctor
 import Control.Monad (join, (>=>))
