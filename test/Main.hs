@@ -1,5 +1,5 @@
 {-# LANGUAGE NoImplicitPrelude, ExistentialQuantification, TypeOperators #-}
-module Unit where
+module Main where
 
 import Lib
 import Core
@@ -281,3 +281,5 @@ suite = do
 
 checkSuite :: IO ()
 checkSuite = putStrLn $ runSuite suite
+
+main = checkSuite

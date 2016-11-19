@@ -1,7 +1,8 @@
 {-# LANGUAGE NoImplicitPrelude #-}
-module Bench where
+module Main where
 
 import Lib as P
+import Core
 import Fold
 import Data.Monoid
 import qualified Prelude as P
@@ -41,7 +42,8 @@ benchAverage = bgroup "average"
       average  n = execute ((/) <$> sum <*> genericLength) [1..n]
       paverage n = P.sum [1..n] / fromIntegral (P.length [1..n])
 
--- Prelude version is more than two times faster.
+-- Prelude version is more than two times faster than `Prefolds/Mul`
+-- and three times faster than `Prefolds/Sum`.
 benchAverageTake :: Benchmark
 benchAverageTake = bgroup "averageTake"
   [ bench "Prefolds/Mul" $ whnf average  (10^7)
@@ -106,7 +108,6 @@ benchInits = bgroup "scan"
   ] where
       lazyInits :: [a] -> [[a]]
       lazyInits = foldr (\x -> ([] :) . P.map (x:)) [[]]
-      {-# INLINE lazyInits #-}
 
 suite :: [Benchmark]
 suite =
@@ -122,3 +123,5 @@ suite =
 
 benchSuite :: IO ()
 benchSuite = defaultMain suite
+
+main = benchSuite

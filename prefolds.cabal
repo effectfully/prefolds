@@ -1,7 +1,7 @@
 name:                prefolds
 version:             0.1.0.0
-synopsis:            Initial project template from stack
-description:         Please see README.md
+synopsis:            Composable short-circuiting streaming folds.
+description:         Please see readme.md
 homepage:            https://github.com/effectfully/prefolds
 license:             BSD3
 license-file:        LICENSE
@@ -17,38 +17,61 @@ library
   hs-source-dirs:
       src
   exposed-modules:
-      Lib
+      Data.Strict.Tuple
+    , Data.Strict.Maybe
+    , Data.Strict.Drive
+    , Lib
     , Pure
+    , Core
     , Fold
   build-depends:
-      base >= 4.7 && < 5
+      base
     , comonad
-    , transformers
+    -- I have no idea why haskell-mode requires this.
+    , criterion
     , mmorph
+    , transformers
   default-language:
       Haskell2010
   GHC-Options:
       -O2
   
-executable prefolds-exe
+test-suite prefolds-test
+  type:
+      exitcode-stdio-1.0
   hs-source-dirs:
-      app
+      test
   main-is:
       Main.hs
   build-depends:
       base
+    , mmorph
     , prefolds
     , transformers
-    , mmorph
-    , criterion
   ghc-options:
       -O2
-      -threaded
-      -rtsopts
-      -with-rtsopts=-N
   default-language:
       Haskell2010
-  
+
+Benchmark prefolds-bench
+  type:
+      exitcode-stdio-1.0
+  hs-source-dirs:
+      bench
+  main-is:
+      Main.hs
+  build-depends:
+      base
+    , criterion
+    , mmorph
+    , prefolds
+    , transformers
+  ghc-options:
+      -O2
+      -rtsopts
+  default-language:
+      Haskell2010
+    
 source-repository head
   type:     git
   location: https://github.com/effectfully/prefolds

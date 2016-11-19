@@ -18,7 +18,7 @@ execute ((/) <$> take (10^6) sum <*> take (10^6) genericLength) [1..]
 
 and it'll stream too.
 
-With `Control.Foldl` `fold null [1..10^6]` will traverse the entire lists. With `prefolds` the following holds: `execute null (1:undefined) ≡ False`.
+With `Control.Foldl` `fold null [1..10^6]` will traverse the entire list. With `prefolds` the following holds: `execute null (1:undefined) ≡ False`.
 
 ## Overview
 
@@ -96,7 +96,7 @@ instance SumApplicative Drive where
   f      <+> x      = More $ runDrive f (runDrive x)
 ```
 
-`SumApplicative` has the same methods and laws as `Applicative` except methods are named differently. There are corresponding `Monad` and `SumMonad` instances, but they don't allow to terminate execution early (like with `Either`), because, well, how would you define `Stop x >>= f = Stop x` if `f :: a -> m b` when you're supposed to return `m b` when you have `Stop x :: m a`? So there is another type class:
+`SumApplicative` has the same methods and laws as `Applicative` except methods are named differently. There are corresponding `Monad` and `SumMonad` instances, but they don't allow to terminate execution early (like with `Either`), because, well, how would you define `Stop x >>= f = Stop x` if `f :: a -> m b` and you're supposed to return a `m b`, but `Stop x :: m a`? So there is another type class:
 
 ```
 class Functor m => MonoMonad m where
@@ -132,7 +132,7 @@ instance Monad m => Comonad (DriveT m) where
 
 The last instance is used a lot across the code.
 
-There also some `MonadTrans`-like type classes: one for `MonoMonad` and the other for `SumMonad`:
+There are also some `MonadTrans`-like type classes: one for `MonoMonad` and the other for `SumMonad`:
 
 ```
 class MonoMonadTrans t where

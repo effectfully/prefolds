@@ -3,7 +3,7 @@
 module Core where
 
 import Lib
-import Data.Strict.Pair
+import Data.Strict.Tuple
 import Data.Strict.Drive
 import qualified Lib
 import qualified Pure
@@ -78,15 +78,15 @@ feed x (Fold g f a) = a >># flip f x =>> Fold g f
 
 combine :: Monad m => (forall a. (a -> a) -> a -> a) -> Fold a m (b -> c) -> Fold a m b -> Fold a m c
 combine c (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
-  acc = isStopT a1 >>~ \b -> Pair3 b <$> a1 <+> duplicate a2
+  acc = isStopT a1 >>~ \b -> Triple b <$> a1 <+> duplicate a2
 
-  step (Pair3 b a1' a2') x
-    | b         = a2' >># flip f2 x =>> Pair3 True a1'
-    | otherwise = driveDriveT (\a1'' -> c (>># flip f2 x) a2' =>> Pair3 True a1'')
-                              (\a1'' -> more $ Pair3 False a1'' a2')
+  step (Triple b a1' a2') x
+    | b         = a2' >># flip f2 x =>> Triple True a1'
+    | otherwise = driveDriveT (\a1'' -> c (>># flip f2 x) a2' =>> Triple True a1'')
+                              (\a1'' -> more $ Triple False a1'' a2')
                               (f1 a1' x)
 
-  final (Pair3 b a1' a2') = g1 a1' <*> (a2' >>~ g2)
+  final (Triple b a1' a2') = g1 a1' <*> (a2' >>~ g2)
 {-# INLINABLE combine #-}
 
 (</>) :: Monad m => Fold a m (b -> c) -> Fold a m b -> Fold a m c
@@ -174,27 +174,27 @@ scan (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step (pair a1 a2) where
 -- Unlike the prelude version, `p` must be only transitive and is not required to be symmetric.
 groupBy :: Monad m => (a -> a -> Bool) -> Fold a m b -> Fold b m c -> Fold a m c
 groupBy p (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
-  acc = a2 =>> Pair4 False (const True) a1
+  acc = a2 =>> Quadruple False (const True) a1
 
-  step (Pair4 _ p' a1' a2') x
+  step (Quadruple _ p' a1' a2') x
     | p' x      = more $ pair a1' a2'
     | otherwise = cross (a1' >>~ g1) a2' f2 =>> pair a1
-    where pair a = Pair4 True (p x) (a >># flip f1 x)
+    where pair a = Quadruple True (p x) (a >># flip f1 x)
 
-  final (Pair4 b _ a1' a2') = (if b then cross (a1' >>~ g1) a2' f2 else a2') >>~ g2
+  final (Quadruple b _ a1' a2') = (if b then cross (a1' >>~ g1) a2' f2 else a2') >>~ g2
 {-# INLINABLE groupBy #-}
 
 -- Same as `groupBy`, but is slightly more efficient.
 -- The only difference is that this version emulates `Prelude.groupBy p [] = [[]]`.
 groupBy1 :: Monad m => (a -> a -> Bool) -> Fold a m b -> Fold b m c -> Fold a m c
 groupBy1 p (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
-  acc = a2 =>> Pair3 (const True) a1
+  acc = a2 =>> Triple (const True) a1
 
-  step (Pair3 p' a1' a2') x | p' x      = more $ pair a1' a2'
-                            | otherwise = cross (a1' >>~ g1) a2' f2 =>> pair a1
-                            where pair a = Pair3 (p x) (a >># flip f1 x)
+  step (Triple p' a1' a2') x | p' x      = more $ pair a1' a2'
+                             | otherwise = cross (a1' >>~ g1) a2' f2 =>> pair a1
+                             where pair a = Triple (p x) (a >># flip f1 x)
 
-  final (Pair3 _ a1' a2') = cross (a1' >>~ g1) a2' f2 >>~ g2
+  final (Triple _ a1' a2') = cross (a1' >>~ g1) a2' f2 >>~ g2
 {-# INLINABLE groupBy1 #-}
 
 group :: (Monad m, Eq a) => Fold a m b -> Fold b m c -> Fold a m c
@@ -210,13 +210,13 @@ inits (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step (a2 =>> Pair a1) where
 
 chunks :: Monad m => Fold a m b -> Fold b m c -> Fold a m c
 chunks (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step (init a2) where
-  init a2' = Pair3 False <$> a1 <*> duplicate a2'
+  init a2' = Triple False <$> a1 <*> duplicate a2'
 
-  step (Pair3 _ a1' a2') x = driveDriveT (\a1'' -> init $ cross (g1 a1'') a2' f2)
-                                         (\a1'' -> more $ Pair3 True a1'' a2')
-                                         (f1 a1' x)
+  step (Triple _ a1' a2') x = driveDriveT (\a1'' -> init $ cross (g1 a1'') a2' f2)
+                                          (\a1'' -> more $ Triple True a1'' a2')
+                                          (f1 a1' x)
 
-  final (Pair3 b a1' a2') = (if b then cross (g1 a1') a2' f2 else a2') >>~ g2
+  final (Triple b a1' a2') = (if b then cross (g1 a1') a2' f2 else a2') >>~ g2
 {-# INLINABLE chunks #-}
 
 consume :: (Monad m, Foldable t) => Fold a m b -> t a -> DriveT m (Fold a m b)
