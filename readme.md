@@ -8,7 +8,7 @@ This is my first attempt to write something usable in Haskell. Any kind of feedb
 
 With [`Control.Foldl`](https://hackage.haskell.org/package/foldl-1.2.1/docs/Control-Foldl.html) you can write
 
-```
+```haskell
 fold ((/) <$> sum <*> genericLength) [1..10^6]
 ```
 
@@ -16,7 +16,7 @@ and it'll stream.
 
 With `prefolds` you can write
 
-```
+```haskell
 exec ((/) <$> take (10^6) sum <*> take (10^6) genericLength) [1..]
 ```
 
@@ -38,7 +38,7 @@ There are multiple ways to compose folds:
 
 Here is an extended example:
 
-```
+```haskell
 -- Prints
 -- 2
 -- 4
@@ -58,7 +58,7 @@ example = execM (final <$> sink1 <+> sink2 </> sink3 <*>> total) [1..] where
 
 Here we compose four streaming folds. `(<+>)` and others have the same associativity and fixity as `(<$>)`, so the fold is parsed as
 
-```
+```haskell
 ((((final <$> sink1) <+> sink2) </> sink3) <*>> total)
 ```
 
@@ -73,20 +73,20 @@ This reads as follows:
 
 `Fold` is defined almost as the one in `Control.Foldl`:
 
-```
+```haskell
 data Fold a m b = forall acc. Fold (acc -> m b) (acc -> a -> DriveT m acc) (DriveT m acc)
 ```
 
 except that we have this `DriveT` transformer which turns a `Monad` into a "`MonoMonad`".
 
-```
+```haskell
 data Drive a = Stop !a | More !a
 newtype DriveT m a = DriveT { getDriveT :: m (Drive a) }
 ```
 
 If an accumulator is in the `Stop` state, then the fold is saturated. If accumulator is in the `More` state, then the fold can consume more input. `Drive` (and `DriveT m` for `Monad m`) is an `Applicative` in two ways:
 
-```
+```haskell
 instance Applicative Drive where
   pure = More
   
@@ -102,7 +102,7 @@ instance SumApplicative Drive where
 
 `SumApplicative` has the same methods and laws as `Applicative` except methods are named differently. There are corresponding `Monad` and `SumMonad` instances, but they don't allow to terminate execution early (like with `Either`), because, well, how would you define `Stop x >>= f = Stop x` if `f :: a -> m b` and you're supposed to return a `m b`, but `Stop x :: m a`? So there is another type class:
 
-```
+```haskell
 class Functor m => MonoMonad m where
   mpure :: a -> m a
   default mpure :: Applicative m => a -> m a
@@ -113,7 +113,7 @@ class Functor m => MonoMonad m where
 
 With this we can define
 
-```
+```haskell
 instance MonoMonad Drive where  
   Stop x >># f = Stop x
   More x >># f = f x
@@ -121,7 +121,7 @@ instance MonoMonad Drive where
 
 `Drive` and `DriveT m` are also `Comonad`s:
 
-```
+```haskell
 instance Comonad Drive where
   extract = runDrive
   
@@ -138,7 +138,7 @@ The last instance is used a lot across the code.
 
 There are also some `MonadTrans`-like type classes: one for `MonoMonad` and the other for `SumMonad`:
 
-```
+```haskell
 class MonoMonadTrans t where
   mlift :: Monad m => m a -> t m a
 
@@ -148,7 +148,7 @@ class SumMonadTrans t where
 
 Instances of these type classes
 
-```
+```haskell
 instance MonoMonadTrans DriveT where
   mlift a = DriveT $ More <$> a
 
@@ -164,14 +164,14 @@ Correspondingly, `Fold a m` is an `Applicative` and a `SumApplicative` (as you'v
 
 As to that `(<*>>)`... have you ever wanted to apply `f :: a -> b -> m c` to `a :: m a` and `b :: m b` in applicative style and get `m c`? You can do `join $ f <$> a <*> b`, but this is kinda verbose. So we can define a special purpose combinator
 
-```
+```haskell
 (<*>>) :: m (a -> m b) -> m a -> m c
 f <*>> a = f >>= (a >>=)
 ```
 
 But there is a nice abstract structure behind this combinator, namely the one of [Kleisli Functors](https://elvishjerricco.github.io/2016/10/12/kleisli-functors.html):
 
-```
+```haskell
 class (Monad m, Functor f) => KleisliFunctor m f where
   kmap :: (a -> m b) -> f a -> f b
   kmap = kjoin .* fmap
@@ -194,7 +194,7 @@ instance Monad m => KleisliFunctor m m where
 
 And this instance
 
-```
+```haskell
 instance Monad m => KleisliFunctor m (Fold a m) where
   kmap h (Fold g f a) = Fold (g >=> h) f a
 ```
