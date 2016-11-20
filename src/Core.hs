@@ -224,11 +224,11 @@ consume = mfoldM (flip feed)
 {-# INLINABLE consume #-}
 
 -- It can be defined in terms of `Lib.foldM` as
--- executeM f = runExceptT . Lib.foldM (driveToExceptT .* flip feed) f >=> runFold . runEither
-executeM :: (Monad m, Foldable t) => Fold a m b -> t a -> m b
-executeM f = consume f >~> runFold
-{-# INLINABLE executeM #-}
+-- execM f = runExceptT . Lib.foldM (driveToExceptT .* flip feed) f >=> runFold . runEither
+execM :: (Monad m, Foldable t) => Fold a m b -> t a -> m b
+execM f = consume f >~> runFold
+{-# INLINABLE execM #-}
 
-execute :: Foldable t => Fold a Identity b -> t a -> b
-execute = runIdentity .* executeM
-{-# INLINABLE execute #-}
+exec :: Foldable t => Fold a Identity b -> t a -> b
+exec = runIdentity .* execM
+{-# INLINABLE exec #-}

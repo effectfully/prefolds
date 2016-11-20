@@ -33,251 +33,251 @@ x === y = tell [x :== y]
 
 
 
-perform :: (Fold a Identity [a] -> Fold a Identity b) -> [a] -> b
-perform f = execute (f list)
+perf :: (Fold a Identity [a] -> Fold a Identity b) -> [a] -> b
+perf f = exec (f list)
 
 -- It's really easy to make an off-by-one error with functions like `scan` and `groupBy`,
 -- hence the tests mostly cover such cases.
 suite :: Suite
 suite = do
   label "map"  $ do
-    perform (map (^2)) []     === ([] :: [Int])
-    perform (map (^2)) [1..3] === [1,4,9]
+    perf (map (^2)) []     === ([] :: [Int])
+    perf (map (^2)) [1..3] === [1,4,9]
   label "take" $ do
-    perform (take 0) []                === ([] :: [Int])
-    perform (take 1) []                === ([] :: [Int])
-    perform (take 0) [1..]             === []
-    perform (take 3) [1,2]             === [1,2]
-    perform (take 2) [1..3]            === [1,2]
-    perform (take 3) [1..3]            === [1..3]
-    perform (take 3) [1..]             === [1..3]
-    perform (take 3) (1:2:3:undefined) === [1..3]
+    perf (take 0) []                === ([] :: [Int])
+    perf (take 1) []                === ([] :: [Int])
+    perf (take 0) [1..]             === []
+    perf (take 3) [1,2]             === [1,2]
+    perf (take 2) [1..3]            === [1,2]
+    perf (take 3) [1..3]            === [1..3]
+    perf (take 3) [1..]             === [1..3]
+    perf (take 3) (1:2:3:undefined) === [1..3]
   label "filter" $ do
-    perform (filter even) []      === []
-    perform (filter even) [1]     === []
-    perform (filter even) [1,3,5] === []
-    perform (filter even) [1..5]  === [2,4]
+    perf (filter even) []      === []
+    perf (filter even) [1]     === []
+    perf (filter even) [1,3,5] === []
+    perf (filter even) [1..5]  === [2,4]
   label "map-take-filter" $ do
-    perform (map (* 3) . take 5 . filter even) [1..] === [6,12]
-    perform (map (* 3) . filter even . take 5) [1..] === [6,12,18,24,30]
-    perform (take 5 . map (* 3) . filter even) [1..] === [6,12]
-    perform (take 5 . filter even . map (* 3)) [1..] === [6,12]
-    perform (filter even . map (* 3) . take 5) [1..] === [6,12,18,24,30]
-    perform (filter even . take 5 . map (* 3)) [1..] === [6,12,18,24,30]
+    perf (map (* 3) . take 5 . filter even) [1..] === [6,12]
+    perf (map (* 3) . filter even . take 5) [1..] === [6,12,18,24,30]
+    perf (take 5 . map (* 3) . filter even) [1..] === [6,12]
+    perf (take 5 . filter even . map (* 3)) [1..] === [6,12]
+    perf (filter even . map (* 3) . take 5) [1..] === [6,12,18,24,30]
+    perf (filter even . take 5 . map (* 3)) [1..] === [6,12,18,24,30]
   label "drop" $ do
-    perform (drop 0) []     === ([] :: [Int])
-    perform (drop 1) []     === ([] :: [Int])
-    perform (drop 0) [1]    === [1]
-    perform (drop 1) [1]    === []
-    perform (drop 2) [1]    === []
-    perform (drop 0) [1..4] === [1..4]
-    perform (drop 1) [1..4] === [2..4]
-    perform (drop 3) [1..4] === [4]
-    perform (drop 4) [1..4] === []
-    perform (drop 5) [1..4] === []
-    perform (drop 9) [1..4] === []
+    perf (drop 0) []     === ([] :: [Int])
+    perf (drop 1) []     === ([] :: [Int])
+    perf (drop 0) [1]    === [1]
+    perf (drop 1) [1]    === []
+    perf (drop 2) [1]    === []
+    perf (drop 0) [1..4] === [1..4]
+    perf (drop 1) [1..4] === [2..4]
+    perf (drop 3) [1..4] === [4]
+    perf (drop 4) [1..4] === []
+    perf (drop 5) [1..4] === []
+    perf (drop 9) [1..4] === []
   label "takeWhile" $ do
-    perform (takeWhile (<= 5)) []                === []
-    perform (takeWhile (<= 5)) [1..4]            === [1..4]
-    perform (takeWhile (<= 5)) [1..6]            === [1..5]
-    perform (takeWhile (<= 5)) [5..]             === [5]
-    perform (takeWhile (<= 5)) [6..]             === []
-    perform (takeWhile (<= 5)) (4:5:6:undefined) === [4,5]
+    perf (takeWhile (<= 5)) []                === []
+    perf (takeWhile (<= 5)) [1..4]            === [1..4]
+    perf (takeWhile (<= 5)) [1..6]            === [1..5]
+    perf (takeWhile (<= 5)) [5..]             === [5]
+    perf (takeWhile (<= 5)) [6..]             === []
+    perf (takeWhile (<= 5)) (4:5:6:undefined) === [4,5]
   label "dropWhile" $ do
-    perform (dropWhile (<= 5)) []     === []
-    perform (dropWhile (<= 5)) [1..4] === []
-    perform (dropWhile (<= 5)) [1..6] === [6]
-    perform (dropWhile (<= 5)) [3..9] === [6..9]
-    perform (dropWhile (<= 5)) [5..9] === [6..9]
+    perf (dropWhile (<= 5)) []     === []
+    perf (dropWhile (<= 5)) [1..4] === []
+    perf (dropWhile (<= 5)) [1..6] === [6]
+    perf (dropWhile (<= 5)) [3..9] === [6..9]
+    perf (dropWhile (<= 5)) [5..9] === [6..9]
   label "scan" $ do
     label "basic" $ do
-      perform (scan sum) []     === [0]
-      perform (scan sum) [1]    === [0,1]
-      perform (scan sum) [1..5] === [0,1,3,6,10,15]
+      perf (scan sum) []     === [0]
+      perf (scan sum) [1]    === [0,1]
+      perf (scan sum) [1..5] === [0,1,3,6,10,15]
     label "stop" $ do
       label "single" $ do
-        perform (take 0 . scan sum) [1..] === [0]
-        perform (scan sum . take 0) [1..] === []
-        perform (take 5 . scan sum) [1..] === [0,1,3,6,10,15]
-        perform (scan sum . take 5) [1..] === [0,1,3,6,10]
-        perform (scan (take 5 sum)) [1..] === [0,1,3,6,10,15]
+        perf (take 0 . scan sum) [1..] === [0]
+        perf (scan sum . take 0) [1..] === []
+        perf (take 5 . scan sum) [1..] === [0,1,3,6,10,15]
+        perf (scan sum . take 5) [1..] === [0,1,3,6,10]
+        perf (scan (take 5 sum)) [1..] === [0,1,3,6,10,15]
       label "multi" $ do
-        perform (take 5 . scan sum . take 3) [1..] === [0,1,3]
-        perform (take 3 . scan sum . take 5) [1..] === [0,1,3,6]
-        perform (scan (take 5 sum) . take 3) [1..] === [0,1,3]
-        perform (scan (take 3 sum) . take 5) [1..] === [0,1,3,6]
-        perform (scan (take 5 sum) . take 4) [1..] === [0,1,3,6]
-        perform (scan (take 4 sum) . take 5) [1..] === [0,1,3,6,10]
-        perform (scan (take 5 sum) . take 5) [1..] === [0,1,3,6,10]
+        perf (take 5 . scan sum . take 3) [1..] === [0,1,3]
+        perf (take 3 . scan sum . take 5) [1..] === [0,1,3,6]
+        perf (scan (take 5 sum) . take 3) [1..] === [0,1,3]
+        perf (scan (take 3 sum) . take 5) [1..] === [0,1,3,6]
+        perf (scan (take 5 sum) . take 4) [1..] === [0,1,3,6]
+        perf (scan (take 4 sum) . take 5) [1..] === [0,1,3,6,10]
+        perf (scan (take 5 sum) . take 5) [1..] === [0,1,3,6,10]
   let testGroupBy gby = do
         label "basic" $ do
-          execute (gby (<) list list) [1]                     === [[1]]
-          execute (gby (<) list list) [1,2]                   === [[1,2]]
-          execute (gby (<) list list) [1,3,2]                 === [[1,3],[2]]
-          execute (gby (<) list list) [2,1,3]                 === [[2],[1,3]]
-          execute (gby (<) list list) [2,1,3,4,5]             === [[2],[1,3,4,5]]
-          execute (gby (<) list list) [2,1,3,4,5,4,2,1,4,6,8] === [[2],[1,3,4,5],[4],[2],[1,4,6,8]]
-          execute (gby (<) list list) [1..5]                  === [[1..5]]
+          exec (gby (<) list list) [1]                     === [[1]]
+          exec (gby (<) list list) [1,2]                   === [[1,2]]
+          exec (gby (<) list list) [1,3,2]                 === [[1,3],[2]]
+          exec (gby (<) list list) [2,1,3]                 === [[2],[1,3]]
+          exec (gby (<) list list) [2,1,3,4,5]             === [[2],[1,3,4,5]]
+          exec (gby (<) list list) [2,1,3,4,5,4,2,1,4,6,8] === [[2],[1,3,4,5],[4],[2],[1,4,6,8]]
+          exec (gby (<) list list) [1..5]                  === [[1..5]]
         label "stop" $ do
           let xs = [7,1,2,3,4,3,5,9,2] ++ [1..]
-          execute (gby (<) (take 0 list) $ take 0 list)  xs === []
-          execute (gby (<) (take 0 list) $ take 1 list)  xs === [[]]
-          execute (gby (<) (take 0 list) $ take 3 list)  xs === [[],[],[]]
-          execute (gby (<) (take 1 list) $ take 0 list)  xs === []
-          execute (gby (<) (take 3 list) $ take 0 list)  xs === []
-          execute (gby (<) (take 1 list) $ take 1 list)  xs === [[7]]
-          execute (gby (<) (take 2 list) $ take 3 list)  xs === [[7],[1,2],[3,5]]
-          execute (gby (<) (take 3 list) $ take 2 list)  xs === [[7],[1,2,3]]
-          execute (gby (<) (take 3 list) $ take 3 list)  xs === [[7],[1,2,3],[3,5,9]]
-          execute (take 12 $ gby (<)  list         list) xs === [[7],[1,2,3,4],[3,5,9],[2],[1,2,3]]
-          execute (take 12 $ gby (<) (take 2 list) list) xs === [[7],[1,2],[3,5],[2],[1,2]]
+          exec (gby (<) (take 0 list) $ take 0 list)  xs === []
+          exec (gby (<) (take 0 list) $ take 1 list)  xs === [[]]
+          exec (gby (<) (take 0 list) $ take 3 list)  xs === [[],[],[]]
+          exec (gby (<) (take 1 list) $ take 0 list)  xs === []
+          exec (gby (<) (take 3 list) $ take 0 list)  xs === []
+          exec (gby (<) (take 1 list) $ take 1 list)  xs === [[7]]
+          exec (gby (<) (take 2 list) $ take 3 list)  xs === [[7],[1,2],[3,5]]
+          exec (gby (<) (take 3 list) $ take 2 list)  xs === [[7],[1,2,3]]
+          exec (gby (<) (take 3 list) $ take 3 list)  xs === [[7],[1,2,3],[3,5,9]]
+          exec (take 12 $ gby (<)  list         list) xs === [[7],[1,2,3,4],[3,5,9],[2],[1,2,3]]
+          exec (take 12 $ gby (<) (take 2 list) list) xs === [[7],[1,2],[3,5],[2],[1,2]]
   label "groupBy" $ do
     label "empty" $ do
-      execute (groupBy (<) sum  list) [] ===  []
-      execute (groupBy (<) list list) [] === ([] :: [[Int]])
+      exec (groupBy (<) sum  list) [] ===  []
+      exec (groupBy (<) list list) [] === ([] :: [[Int]])
     testGroupBy groupBy
   label "groupBy1" $ do
     label "empty" $ do
-      execute (groupBy1 (<) sum  list) [] ===  [0]
-      execute (groupBy1 (<) list list) [] === ([[]] :: [[Int]])
+      exec (groupBy1 (<) sum  list) [] ===  [0]
+      exec (groupBy1 (<) list list) [] === ([[]] :: [[Int]])
     testGroupBy groupBy1
   label "inits" $ do
     label "basic" $ do
-      execute (inits list list) []     === [[] :: [Int]]
-      execute (inits list list) [1]    === [[],[1]]
-      execute (inits list list) [1..4] === [[],[1],[1,2],[1,2,3],[1,2,3,4]]
+      exec (inits list list) []     === [[] :: [Int]]
+      exec (inits list list) [1]    === [[],[1]]
+      exec (inits list list) [1..4] === [[],[1],[1,2],[1,2,3],[1,2,3,4]]
     label "stop" $ do
       label "finite" $ do
-        execute (inits (take 0 list) (take 0 list)) [1,2] === []
-        execute (inits (take 3 list) (take 0 list)) [1,2] === []
-        execute (inits (take 0 list) (take 1 list)) [1,2] === [[]]
-        execute (inits (take 0 list) (take 4 list)) [1,2] === [[],[],[]]
-        execute (inits (take 2 list) (take 4 list)) [1,2] === [[],[1],[1,2]]
-        execute (inits (take 4 list) (take 4 list)) [1,2] === [[],[1],[1,2]]
-        execute (inits (take 3 list) (take 5 list)) [1,2] === [[],[1],[1,2]]
+        exec (inits (take 0 list) (take 0 list)) [1,2] === []
+        exec (inits (take 3 list) (take 0 list)) [1,2] === []
+        exec (inits (take 0 list) (take 1 list)) [1,2] === [[]]
+        exec (inits (take 0 list) (take 4 list)) [1,2] === [[],[],[]]
+        exec (inits (take 2 list) (take 4 list)) [1,2] === [[],[1],[1,2]]
+        exec (inits (take 4 list) (take 4 list)) [1,2] === [[],[1],[1,2]]
+        exec (inits (take 3 list) (take 5 list)) [1,2] === [[],[1],[1,2]]
       label "infinite" $ do
-        execute (inits (take 0 list) (take 0 list)) [1..] === []
-        execute (inits (take 3 list) (take 0 list)) [1..] === []
-        execute (inits (take 0 list) (take 1 list)) [1..] === [[]]
-        execute (inits (take 0 list) (take 4 list)) [1..] === [[],[],[],[]]
-        execute (inits (take 2 list) (take 4 list)) [1..] === [[],[1],[1,2],[1,2]]
-        execute (inits (take 4 list) (take 4 list)) [1..] === [[],[1],[1,2],[1,2,3]]
-        execute (inits (take 3 list) (take 5 list)) [1..] === [[],[1],[1,2],[1,2,3],[1,2,3]]
+        exec (inits (take 0 list) (take 0 list)) [1..] === []
+        exec (inits (take 3 list) (take 0 list)) [1..] === []
+        exec (inits (take 0 list) (take 1 list)) [1..] === [[]]
+        exec (inits (take 0 list) (take 4 list)) [1..] === [[],[],[],[]]
+        exec (inits (take 2 list) (take 4 list)) [1..] === [[],[1],[1,2],[1,2]]
+        exec (inits (take 4 list) (take 4 list)) [1..] === [[],[1],[1,2],[1,2,3]]
+        exec (inits (take 3 list) (take 5 list)) [1..] === [[],[1],[1,2],[1,2,3],[1,2,3]]
   label "chunks" $ do
     label "degenerate" $ do
-      execute (chunks list list) []     === ([] :: [[Int]])
-      execute (chunks list list) [1]    === [[1]]
-      execute (chunks list list) [1..4] === [[1..4]]
+      exec (chunks list list) []     === ([] :: [[Int]])
+      exec (chunks list list) [1]    === [[1]]
+      exec (chunks list list) [1..4] === [[1..4]]
     label "basic" $ do
       label "degenerate" $ do
-        execute (chunks (take 0 list) list) []     === ([] :: [[Int]])
-        execute (chunks (take 0 list) list) [1]    === ([] :: [[Int]])
-        execute (chunks (take 0 list) list) [1..4] === ([] :: [[Int]])
+        exec (chunks (take 0 list) list) []     === ([] :: [[Int]])
+        exec (chunks (take 0 list) list) [1]    === ([] :: [[Int]])
+        exec (chunks (take 0 list) list) [1..4] === ([] :: [[Int]])
       label "basic" $ do
-        execute (chunks (take 1 list) list) []     === ([] :: [[Int]])
-        execute (chunks (take 1 list) list) [1]    === [[1]]
-        execute (chunks (take 1 list) list) [1..4] === [[1],[2],[3],[4]]
-        execute (chunks (take 3 list) list) [1]    === [[1]]
-        execute (chunks (take 3 list) list) [1..4] === [[1,2,3],[4]]
-        execute (chunks (take 3 list) list) [1..5] === [[1,2,3],[4,5]]
-        execute (chunks (take 3 list) list) [1..6] === [[1,2,3],[4,5,6]]
+        exec (chunks (take 1 list) list) []     === ([] :: [[Int]])
+        exec (chunks (take 1 list) list) [1]    === [[1]]
+        exec (chunks (take 1 list) list) [1..4] === [[1],[2],[3],[4]]
+        exec (chunks (take 3 list) list) [1]    === [[1]]
+        exec (chunks (take 3 list) list) [1..4] === [[1,2,3],[4]]
+        exec (chunks (take 3 list) list) [1..5] === [[1,2,3],[4,5]]
+        exec (chunks (take 3 list) list) [1..6] === [[1,2,3],[4,5,6]]
   label "compose" $ do
     label "parallel" $ do
       label "product" $ do
-        execute ((,) <$> list        <*> list)        []     === ([],[] :: [Int])
-        execute ((,) <$> list        <*> list)        [1..4] === ([1..4],[1..4])
-        execute ((,) <$> take 3 list <*> list)        [1..4] === ([1..3],[1..3])
-        execute ((,) <$> list        <*> take 3 list) [1..4] === ([1..3],[1..3])
-        execute ((,) <$> take 0 list <*> take 1 list) [1..]  === ([],[])
-        execute ((,) <$> take 1 list <*> take 0 list) [1..]  === ([],[])
-        execute ((,) <$> take 1 list <*> take 1 list) [1..]  === ([1],[1])
-        execute ((,) <$> take 3 list <*> take 4 list) [1..]  === ([1..3],[1..3])
-        execute ((,) <$> take 4 list <*> take 3 list) [1..]  === ([1..3],[1..3])
-        execute ((,) <$> take 4 list <*> take 4 list) [1..]  === ([1..4],[1..4])
+        exec ((,) <$> list        <*> list)        []     === ([],[] :: [Int])
+        exec ((,) <$> list        <*> list)        [1..4] === ([1..4],[1..4])
+        exec ((,) <$> take 3 list <*> list)        [1..4] === ([1..3],[1..3])
+        exec ((,) <$> list        <*> take 3 list) [1..4] === ([1..3],[1..3])
+        exec ((,) <$> take 0 list <*> take 1 list) [1..]  === ([],[])
+        exec ((,) <$> take 1 list <*> take 0 list) [1..]  === ([],[])
+        exec ((,) <$> take 1 list <*> take 1 list) [1..]  === ([1],[1])
+        exec ((,) <$> take 3 list <*> take 4 list) [1..]  === ([1..3],[1..3])
+        exec ((,) <$> take 4 list <*> take 3 list) [1..]  === ([1..3],[1..3])
+        exec ((,) <$> take 4 list <*> take 4 list) [1..]  === ([1..4],[1..4])
       label "sum" $ do
-        execute ((,) <$> list        <+> list)        []     === ([],[] :: [Int])
-        execute ((,) <$> list        <+> list)        [1..4] === ([1..4],[1..4])
-        execute ((,) <$> take 3 list <+> list)        [1..4] === ([1..3],[1..4])
-        execute ((,) <$> list        <+> take 3 list) [1..4] === ([1..4],[1..3])
-        execute ((,) <$> take 0 list <+> take 1 list) [1..]  === ([],[1])
-        execute ((,) <$> take 1 list <+> take 0 list) [1..]  === ([1],[])
-        execute ((,) <$> take 1 list <+> take 1 list) [1..]  === ([1],[1])
-        execute ((,) <$> take 3 list <+> take 4 list) [1..]  === ([1..3],[1..4])
-        execute ((,) <$> take 4 list <+> take 3 list) [1..]  === ([1..4],[1..3])
-        execute ((,) <$> take 4 list <+> take 4 list) [1..]  === ([1..4],[1..4])
+        exec ((,) <$> list        <+> list)        []     === ([],[] :: [Int])
+        exec ((,) <$> list        <+> list)        [1..4] === ([1..4],[1..4])
+        exec ((,) <$> take 3 list <+> list)        [1..4] === ([1..3],[1..4])
+        exec ((,) <$> list        <+> take 3 list) [1..4] === ([1..4],[1..3])
+        exec ((,) <$> take 0 list <+> take 1 list) [1..]  === ([],[1])
+        exec ((,) <$> take 1 list <+> take 0 list) [1..]  === ([1],[])
+        exec ((,) <$> take 1 list <+> take 1 list) [1..]  === ([1],[1])
+        exec ((,) <$> take 3 list <+> take 4 list) [1..]  === ([1..3],[1..4])
+        exec ((,) <$> take 4 list <+> take 3 list) [1..]  === ([1..4],[1..3])
+        exec ((,) <$> take 4 list <+> take 4 list) [1..]  === ([1..4],[1..4])
     label "sequential" $ do
       label "connect" $ do
-        execute ((,) <$> list        </> list)        []     === ([],[] :: [Int])
-        execute ((,) <$> list        </> list)        [1..4] === ([1..4],[])
-        execute ((,) <$> take 3 list </> list)        [1..4] === ([1..3],[4])
-        execute ((,) <$> list        </> take 3 list) [1..4] === ([1..4],[])
-        execute ((,) <$> take 0 list </> take 1 list) [1..]  === ([],[1])
-        execute ((,) <$> take 1 list </> take 0 list) [1..]  === ([1],[])
-        execute ((,) <$> take 1 list </> take 1 list) [1..]  === ([1],[2])
-        execute ((,) <$> take 3 list </> take 4 list) [1..]  === ([1..3],[4..7])
-        execute ((,) <$> take 4 list </> take 3 list) [1..]  === ([1..4],[5..7])
-        execute ((,) <$> take 4 list </> take 4 list) [1..]  === ([1..4],[5..8])
+        exec ((,) <$> list        </> list)        []     === ([],[] :: [Int])
+        exec ((,) <$> list        </> list)        [1..4] === ([1..4],[])
+        exec ((,) <$> take 3 list </> list)        [1..4] === ([1..3],[4])
+        exec ((,) <$> list        </> take 3 list) [1..4] === ([1..4],[])
+        exec ((,) <$> take 0 list </> take 1 list) [1..]  === ([],[1])
+        exec ((,) <$> take 1 list </> take 0 list) [1..]  === ([1],[])
+        exec ((,) <$> take 1 list </> take 1 list) [1..]  === ([1],[2])
+        exec ((,) <$> take 3 list </> take 4 list) [1..]  === ([1..3],[4..7])
+        exec ((,) <$> take 4 list </> take 3 list) [1..]  === ([1..4],[5..7])
+        exec ((,) <$> take 4 list </> take 4 list) [1..]  === ([1..4],[5..8])
       label "weld" $ do
-        execute ((,) <$> list        <//> list)        []     === ([],[] :: [Int])
-        execute ((,) <$> list        <//> list)        [1..4] === ([1..4],[]) -- Sic.
-        execute ((,) <$> take 3 list <//> list)        [1..4] === ([1..3],[3,4])
-        execute ((,) <$> list        <//> take 3 list) [1..4] === ([1..4],[]) -- Sic.
-        execute ((,) <$> take 0 list <//> take 1 list) [1..]  === ([],[1])
-        execute ((,) <$> take 1 list <//> take 0 list) [1..]  === ([1],[])
-        execute ((,) <$> take 1 list <//> take 1 list) [1..]  === ([1],[1])
-        execute ((,) <$> take 3 list <//> take 4 list) [1..]  === ([1..3],[3..6])
-        execute ((,) <$> take 4 list <//> take 3 list) [1..]  === ([1..4],[4..6])
-        execute ((,) <$> take 4 list <//> take 4 list) [1..]  === ([1..4],[4..7])
+        exec ((,) <$> list        <//> list)        []     === ([],[] :: [Int])
+        exec ((,) <$> list        <//> list)        [1..4] === ([1..4],[]) -- Sic.
+        exec ((,) <$> take 3 list <//> list)        [1..4] === ([1..3],[3,4])
+        exec ((,) <$> list        <//> take 3 list) [1..4] === ([1..4],[]) -- Sic.
+        exec ((,) <$> take 0 list <//> take 1 list) [1..]  === ([],[1])
+        exec ((,) <$> take 1 list <//> take 0 list) [1..]  === ([1],[])
+        exec ((,) <$> take 1 list <//> take 1 list) [1..]  === ([1],[1])
+        exec ((,) <$> take 3 list <//> take 4 list) [1..]  === ([1..3],[3..6])
+        exec ((,) <$> take 4 list <//> take 3 list) [1..]  === ([1..4],[4..6])
+        exec ((,) <$> take 4 list <//> take 4 list) [1..]  === ([1..4],[4..7])
   label "random" $ do
-    perform (takeWhile (< 10) . dropWhile (<= 3) . filter even)    [1..] === [4,6,8]
-    execute ((,) <$> take 4 list <+> (drop 2 . take 4) list)       [1..] === ([1..4],[3..6])
-    perform (filter even . scan sum . take 6 . dropWhile (<= 10))  [1..] === [12,20,30]
-    execute ((,,) <$> take 4 list <+> take 3 list <*> take 2 list) [1..] === ([1..2],[1..2],[1..2])
-    execute ((,,) <$> take 4 list <+> take 3 list <*> take 5 list) [1..] === ([1..4],[1..3],[1..4])
-    execute ((,,) <$> take 4 list <+> take 3 list </> take 2 list) [1..] === ([1..4],[1..3],[5..6])
+    perf (takeWhile (< 10) . dropWhile (<= 3) . filter even)    [1..] === [4,6,8]
+    exec ((,) <$> take 4 list <+> (drop 2 . take 4) list)       [1..] === ([1..4],[3..6])
+    perf (filter even . scan sum . take 6 . dropWhile (<= 10))  [1..] === [12,20,30]
+    exec ((,,) <$> take 4 list <+> take 3 list <*> take 2 list) [1..] === ([1..2],[1..2],[1..2])
+    exec ((,,) <$> take 4 list <+> take 3 list <*> take 5 list) [1..] === ([1..4],[1..3],[1..4])
+    exec ((,,) <$> take 4 list <+> take 3 list </> take 2 list) [1..] === ([1..4],[1..3],[5..6])
   label "null" $ do
-    execute null []             === True
-    execute null [1]            === False
-    execute null (1 : repeat 2) === False
-    execute null (1:undefined)  === False
+    exec null []             === True
+    exec null [1]            === False
+    exec null (1 : repeat 2) === False
+    exec null (1:undefined)  === False
   label "length" $ do
-    execute length []     === 0
-    execute length [1]    === 1
-    execute length [1..5] === 5
+    exec length []     === 0
+    exec length [1]    === 1
+    exec length [1..5] === 5
   label "all" $ do
-    execute (all even) []                    === True
-    execute (all even) [1]                   === False
-    execute (all even) [2]                   === True
-    execute (all even) [2,3]                 === False
-    execute (all even) [2,4,6]               === True
-    execute (all even) ([2,4,6] ++ repeat 1) === False
-    execute (all even) (2:4:6:1:undefined)   === False
+    exec (all even) []                    === True
+    exec (all even) [1]                   === False
+    exec (all even) [2]                   === True
+    exec (all even) [2,3]                 === False
+    exec (all even) [2,4,6]               === True
+    exec (all even) ([2,4,6] ++ repeat 1) === False
+    exec (all even) (2:4:6:1:undefined)   === False
   label "any" $ do
-    execute (any even) []                    === False
-    execute (any even) [1]                   === False
-    execute (any even) [2]                   === True
-    execute (any even) [2,3]                 === True
-    execute (any even) [1,3,4]               === True
-    execute (any even) ([1,3,5] ++ repeat 2) === True
-    execute (any even) (1:3:5:2:undefined)   === True
+    exec (any even) []                    === False
+    exec (any even) [1]                   === False
+    exec (any even) [2]                   === True
+    exec (any even) [2,3]                 === True
+    exec (any even) [1,3,4]               === True
+    exec (any even) ([1,3,5] ++ repeat 2) === True
+    exec (any even) (1:3:5:2:undefined)   === True
   label "find" $ do
-    execute (find even) []                    === Nothing
-    execute (find even) [1]                   === Nothing
-    execute (find even) [2]                   === Just 2
-    execute (find even) [2,3]                 === Just 2
-    execute (find even) [1,3,4]               === Just 4
-    execute (find even) ([1,3,5] ++ repeat 2) === Just 2
-    execute (find even) (1:3:5:2:undefined)   === Just 2
+    exec (find even) []                    === Nothing
+    exec (find even) [1]                   === Nothing
+    exec (find even) [2]                   === Just 2
+    exec (find even) [2,3]                 === Just 2
+    exec (find even) [1,3,4]               === Just 4
+    exec (find even) ([1,3,5] ++ repeat 2) === Just 2
+    exec (find even) (1:3:5:2:undefined)   === Just 2
   label "head" $ do
-    execute head []             === (Nothing :: Maybe Int)
-    execute head [1]            === Just 1
-    execute head [1..5]         === Just 1
-    execute head (1 : repeat 2) === Just 1
-    execute head (1:undefined)  === Just 1
+    exec head []             === (Nothing :: Maybe Int)
+    exec head [1]            === Just 1
+    exec head [1..5]         === Just 1
+    exec head (1 : repeat 2) === Just 1
+    exec head (1:undefined)  === Just 1
   label "last" $ do
-    execute last []     === (Nothing :: Maybe Int)
-    execute last [1]    === Just 1
-    execute last [1..5] === Just 5
+    exec last []     === (Nothing :: Maybe Int)
+    exec last [1]    === Just 1
+    exec last [1..5] === Just 5
 
 checkSuite :: IO ()
 checkSuite = putStrLn $ runSuite suite

@@ -17,12 +17,12 @@ and it'll stream.
 With `prefolds` you can write
 
 ```
-execute ((/) <$> take (10^6) sum <*> take (10^6) genericLength) [1..]
+exec ((/) <$> take (10^6) sum <*> take (10^6) genericLength) [1..]
 ```
 
 and it'll stream too.
 
-With `Control.Foldl` `fold null [1..10^6]` will traverse the entire list. With `prefolds` the following holds: `execute null (1:undefined) ≡ False`.
+With `Control.Foldl` `fold null [1..10^6]` will traverse the entire list. With `prefolds` the following holds: `exec null (1:undefined) ≡ False`.
 
 ## Overview
 
@@ -47,7 +47,7 @@ Here is an extended example:
 -- [7,8,9,10]
 -- 11
 example :: IO ()
-example = executeM (final <$> sink1 <+> sink2 </> sink3 <*>> total) [1..] where
+example = execM (final <$> sink1 <+> sink2 </> sink3 <*>> total) [1..] where
   final x y zs n = print [x,y] >> print zs >> print n
   sink1 = take 4 $ map succ product                     -- 2 * 3 * 4 * 5 = 120
   sink2 = take 6 . filter even $ traverse_ print *> sum -- 2 + 4 + 6 = 12
