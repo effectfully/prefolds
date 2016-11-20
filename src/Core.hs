@@ -219,6 +219,18 @@ chunks (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step (init a2) where
   final (Triple b a1' a2') = (if b then cross (g1 a1') a2' f2 else a2') >>~ g2
 {-# INLINABLE chunks #-}
 
+chunksOf :: Monad m => Int -> Fold a m b -> Fold b m c -> Fold a m c
+chunksOf = chunks .* take
+{-# INLINABLE chunksOf #-}
+
+splitWhen :: Monad m => (a -> Bool) -> Fold a m b -> Fold b m c -> Fold a m c
+splitWhen = chunks .* takeWhile
+{-# INLINABLE splitWhen #-}
+
+splitOne :: (Monad m, Eq a) => a -> Fold a m b -> Fold b m c -> Fold a m c
+splitOne = splitWhen . (/=)
+{-# INLINABLE splitOne #-}
+
 consume :: (Monad m, Foldable t) => Fold a m b -> t a -> DriveT m (Fold a m b)
 consume = mfoldM (flip feed)
 {-# INLINABLE consume #-}

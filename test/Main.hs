@@ -168,19 +168,29 @@ suite = do
       exec (chunks list list) []     === ([] :: [[Int]])
       exec (chunks list list) [1]    === [[1]]
       exec (chunks list list) [1..4] === [[1..4]]
-    label "basic" $ do
+    label "chunksOf" $ do
       label "degenerate" $ do
-        exec (chunks (take 0 list) list) []     === ([] :: [[Int]])
-        exec (chunks (take 0 list) list) [1]    === ([] :: [[Int]])
-        exec (chunks (take 0 list) list) [1..4] === ([] :: [[Int]])
+        exec (chunksOf 0 list list) []     === ([] :: [[Int]])
+        exec (chunksOf 0 list list) [1]    === ([] :: [[Int]])
+        exec (chunksOf 0 list list) [1..4] === ([] :: [[Int]])
       label "basic" $ do
-        exec (chunks (take 1 list) list) []     === ([] :: [[Int]])
-        exec (chunks (take 1 list) list) [1]    === [[1]]
-        exec (chunks (take 1 list) list) [1..4] === [[1],[2],[3],[4]]
-        exec (chunks (take 3 list) list) [1]    === [[1]]
-        exec (chunks (take 3 list) list) [1..4] === [[1,2,3],[4]]
-        exec (chunks (take 3 list) list) [1..5] === [[1,2,3],[4,5]]
-        exec (chunks (take 3 list) list) [1..6] === [[1,2,3],[4,5,6]]
+        exec (chunksOf 1 list list) []     === ([] :: [[Int]])
+        exec (chunksOf 1 list list) [1]    === [[1]]
+        exec (chunksOf 1 list list) [1..4] === [[1],[2],[3],[4]]
+        exec (chunksOf 3 list list) [1]    === [[1]]
+        exec (chunksOf 3 list list) [1..4] === [[1,2,3],[4]]
+        exec (chunksOf 3 list list) [1..5] === [[1,2,3],[4,5]]
+        exec (chunksOf 3 list list) [1..6] === [[1,2,3],[4,5,6]]
+    label "splitOne" $ do
+      exec (splitOne ',' list list) ""          === []
+      exec (splitOne ',' list list) ","         === [""]
+      exec (splitOne ',' list list) ",,"        === ["",""]
+      exec (splitOne ',' list list) "a"         === ["a"]
+      exec (splitOne ',' list list) "abc"       === ["abc"]
+      exec (splitOne ',' list list) "a,bcd"     === ["a", "bcd"]
+      exec (splitOne ',' list list) "ab,c,def"  === ["ab", "c", "def"]
+      exec (splitOne ',' list list) "abc,def,"  === ["abc", "def"]
+      exec (splitOne ',' list list) "abc,def,," === ["abc", "def", ""]
   label "compose" $ do
     label "parallel" $ do
       label "product" $ do
@@ -235,6 +245,8 @@ suite = do
     exec ((,,) <$> take 4 list <+> take 3 list <*> take 2 list) [1..] === ([1..2],[1..2],[1..2])
     exec ((,,) <$> take 4 list <+> take 3 list <*> take 5 list) [1..] === ([1..4],[1..3],[1..4])
     exec ((,,) <$> take 4 list <+> take 3 list </> take 2 list) [1..] === ([1..4],[1..3],[5..6])
+    exec ((,) <$> sum <*> any even) [1..3] === (3,True)
+    exec ((,) <$> sum <+> any even) [1..3] === (6,True)
   label "null" $ do
     exec null []             === True
     exec null [1]            === False
