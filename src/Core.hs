@@ -246,8 +246,9 @@ exec :: Foldable t => Fold a Identity b -> t a -> b
 exec = runIdentity .* execM
 {-# INLINABLE exec #-}
 
-impurely :: Monad n
-         => (forall m acc. Absorb m n => (acc -> a -> m acc) -> m acc -> (acc -> n b) -> c)
-         -> Fold a n b -> c
-impurely h (Fold g f a) = h f a g
+impurely :: Monad m
+         => (forall f acc. (forall a b. f a -> (a -> m b) -> m b) ->
+               (acc -> a -> f acc) -> f acc -> (acc -> m b) -> c)
+         -> Fold a m b -> c
+impurely h (Fold g f a) = h (>>~) f a g
 {-# INLINABLE impurely #-}

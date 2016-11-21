@@ -1,4 +1,5 @@
-{-# LANGUAGE ExistentialQuantification, TypeOperators, BangPatterns, NoImplicitPrelude #-}
+{-# LANGUAGE ExistentialQuantification, TypeOperators, NoImplicitPrelude #-}
+{-# LANGUAGE BangPatterns, RankNTypes #-}
 module Main where
 
 import Lib
@@ -294,8 +295,9 @@ suite = do
 checkSuite :: IO ()
 checkSuite = putStrLn $ runSuite suite
 
-foldMN :: Absorb m n => (acc -> a -> m acc) -> m acc -> (acc -> n b) -> [n a] -> n b
-foldMN f a g xs = a >>~ foldr (\nx r !a -> nx >>= (f a >~> r)) g xs
+foldMN :: Monad m => (forall a b. f a -> (a -> m b) -> m b) ->
+            (acc -> a -> f acc) -> f acc -> (acc -> m b) -> [m a] -> m b
+foldMN (>>~) f a g xs = a >>~ foldr (\mx r !a -> mx >>= \x -> f a x >>~ r) g xs
 
 -- 1 1
 -- 2 4

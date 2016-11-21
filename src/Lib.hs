@@ -119,6 +119,6 @@ class (Functor f, Monad m) => Absorb f m where
   ajoin a = a >>~ id
   {-# INLINE ajoin #-}
 
-(>~>) :: Absorb f g => (a -> f b) -> (b -> g c) -> a -> g c
+(>~>) :: Absorb f m => (a -> f b) -> (b -> m c) -> a -> m c
 f >~> g = \x -> f x >>~ g
 {-# INLINE (>~>) #-}
