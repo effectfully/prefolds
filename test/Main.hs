@@ -295,7 +295,7 @@ suite = do
 checkSuite :: IO ()
 checkSuite = putStrLn $ runSuite suite
 
-foldMN :: Monad m => (forall a b. f a -> (a -> m b) -> m b) ->
+foldMN :: Monad m => (f acc -> (acc -> m b) -> m b) ->
             (acc -> a -> f acc) -> f acc -> (acc -> m b) -> [m a] -> m b
 foldMN (>>~) f a g xs = a >>~ foldr (\mx r !a -> mx >>= \x -> f a x >>~ r) g xs
 
@@ -303,6 +303,7 @@ foldMN (>>~) f a g xs = a >>~ foldr (\mx r !a -> mx >>= \x -> f a x >>~ r) g xs
 -- 2 4
 -- 3 9
 test :: IO ()
-test = impurely foldMN (traverse_ $ print . (^2)) $ P.map (\n -> n <$ putStr (show n ++ " ")) [1,2,3]
+test = impurely foldMN (take 3 . traverse_ $ print . (^2)) $
+         P.map (\n -> n <$ putStr (show n ++ " ")) [1..] where
 
 main = checkSuite

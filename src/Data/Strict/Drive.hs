@@ -95,6 +95,10 @@ driveT :: Functor f => (a -> b) -> (a -> b) -> DriveT f a -> f b
 driveT g f (DriveT a) = drive g f <$> a
 {-# INLINEABLE driveT #-}
 
+driveTM :: Monad m => (a -> m b) -> (a -> m b) -> DriveT m a -> m b
+driveTM g f (DriveT a) = a >>= drive g f
+{-# INLINEABLE driveTM #-}
+
 runDriveT :: Functor f => DriveT f a -> f a
 runDriveT (DriveT a) = runDrive <$> a
 {-# INLINEABLE runDriveT #-}

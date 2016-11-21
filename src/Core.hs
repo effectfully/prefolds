@@ -247,8 +247,8 @@ exec = runIdentity .* execM
 {-# INLINABLE exec #-}
 
 impurely :: Monad m
-         => (forall f acc. (forall a b. f a -> (a -> m b) -> m b) ->
-               (acc -> a -> f acc) -> f acc -> (acc -> m b) -> c)
+         => (forall acc. (DriveT m acc -> (acc -> m b) -> m b) ->
+               (acc -> a -> DriveT m acc) -> DriveT m acc -> (acc -> m b) -> c)
          -> Fold a m b -> c
-impurely h (Fold g f a) = h (>>~) f a g
+impurely h (Fold g f a) = h (flip $ driveTM g) f a g
 {-# INLINABLE impurely #-}
