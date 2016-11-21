@@ -6,15 +6,6 @@ import Lib
 import Data.Traversable (foldMapDefault)
 import Control.Monad.Trans.Except (ExceptT(..))
 
-infixl 1 >>~, >~>
-
-class Absorb f g where
-  (>>~) :: f a -> (a -> g b) -> g b
-
-(>~>) :: Absorb f g => (a -> f b) -> (b -> g c) -> a -> g c
-f >~> g = \x -> f x >>~ g
-{-# INLINE (>~>) #-}
-
 data Drive a = Stop !a | More !a
 
 drive :: (a -> b) -> (a -> b) -> Drive a -> b
@@ -108,9 +99,9 @@ runDriveT :: Functor f => DriveT f a -> f a
 runDriveT (DriveT a) = runDrive <$> a
 {-# INLINEABLE runDriveT #-}
 
-driveDriveT :: Monad m => (a -> DriveT m b) -> (a -> DriveT m b) -> DriveT m a -> DriveT m b
-driveDriveT f g (DriveT a) = a >>~ drive f g
-{-# INLINABLE driveDriveT #-}
+bindDriveT :: Monad m => (a -> DriveT m b) -> (a -> DriveT m b) -> DriveT m a -> DriveT m b
+bindDriveT f g (DriveT a) = a >>~ drive f g
+{-# INLINABLE bindDriveT #-}
 
 isStopT :: Functor f => DriveT f a -> f Bool
 isStopT (DriveT a) = isStop <$> a
@@ -176,7 +167,7 @@ instance Applicative f => SumApplicative (DriveT f) where
   {-# INLINEABLE (<+>) #-}
 
 instance Monad m => MonoMonad (DriveT m) where
-  a >># f = driveDriveT halt f a
+  a >># f = bindDriveT halt f a
   {-# INLINABLE (>>#) #-}
 
 instance Monad m => Monad (DriveT m) where
@@ -191,7 +182,7 @@ instance Monad m => Comonad (DriveT m) where
   extract  = error "there is no `extract` for `DriveT m` unless `m` is a comonad, \
                    \ but this is not needed for `extend`, which is more important than `extract`"
 
-  extend f = driveDriveT (halt . f . halt) (more . f . more)
+  extend f = bindDriveT (halt . f . halt) (more . f . more)
   {-# INLINABLE extend #-}
 
 instance MonoMonadTrans DriveT where
@@ -210,6 +201,7 @@ instance Monad m => Absorb (DriveT m) m where
   a >>~ f = runDriveT a >>= f
   {-# INLINEABLE (>>~) #-}
 
+-- Is this law-abiding?
 instance Monad m => Absorb m (DriveT m) where
   a >>~ f = DriveT $ a >>= getDriveT . f
   {-# INLINEABLE (>>~) #-}

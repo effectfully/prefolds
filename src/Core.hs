@@ -7,6 +7,7 @@ import Data.Strict.Tuple
 import Data.Strict.Drive
 import qualified Lib
 import qualified Pure
+import Control.Monad.Trans.Except
 
 infixl 4 </>, />, </>>, <//>, //>, <//>>
 
@@ -82,9 +83,9 @@ combine c (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
 
   step (Triple b a1' a2') x
     | b         = a2' >># flip f2 x =>> Triple True a1'
-    | otherwise = driveDriveT (\a1'' -> c (>># flip f2 x) a2' =>> Triple True a1'')
-                              (\a1'' -> more $ Triple False a1'' a2')
-                              (f1 a1' x)
+    | otherwise = bindDriveT (\a1'' -> c (>># flip f2 x) a2' =>> Triple True a1'')
+                             (\a1'' -> more $ Triple False a1'' a2')
+                             (f1 a1' x)
 
   final (Triple b a1' a2') = g1 a1' <*> (a2' >>~ g2)
 {-# INLINABLE combine #-}
@@ -212,9 +213,9 @@ chunks :: Monad m => Fold a m b -> Fold b m c -> Fold a m c
 chunks (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step (init a2) where
   init a2' = Triple False <$> a1 <*> duplicate a2'
 
-  step (Triple _ a1' a2') x = driveDriveT (\a1'' -> init $ cross (g1 a1'') a2' f2)
-                                          (\a1'' -> more $ Triple True a1'' a2')
-                                          (f1 a1' x)
+  step (Triple _ a1' a2') x = bindDriveT (\a1'' -> init $ cross (g1 a1'') a2' f2)
+                                         (\a1'' -> more $ Triple True a1'' a2')
+                                         (f1 a1' x)
 
   final (Triple b a1' a2') = (if b then cross (g1 a1') a2' f2 else a2') >>~ g2
 {-# INLINABLE chunks #-}
@@ -244,3 +245,9 @@ execM f = consume f >~> runFold
 exec :: Foldable t => Fold a Identity b -> t a -> b
 exec = runIdentity .* execM
 {-# INLINABLE exec #-}
+
+impurely :: Monad n
+         => (forall m acc. Absorb m n => (acc -> a -> m acc) -> m acc -> (acc -> n b) -> c)
+         -> Fold a n b -> c
+impurely h (Fold g f a) = h f a g
+{-# INLINABLE impurely #-}

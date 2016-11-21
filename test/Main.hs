@@ -1,4 +1,4 @@
-{-# LANGUAGE NoImplicitPrelude, ExistentialQuantification, TypeOperators #-}
+{-# LANGUAGE ExistentialQuantification, TypeOperators, BangPatterns, NoImplicitPrelude #-}
 module Main where
 
 import Lib
@@ -293,5 +293,14 @@ suite = do
 
 checkSuite :: IO ()
 checkSuite = putStrLn $ runSuite suite
+
+foldMN :: Absorb m n => (acc -> a -> m acc) -> m acc -> (acc -> n b) -> [n a] -> n b
+foldMN f a g xs = a >>~ foldr (\nx r !a -> nx >>= (f a >~> r)) g xs
+
+-- 1 1
+-- 2 4
+-- 3 9
+test :: IO ()
+test = impurely foldMN (traverse_ $ print . (^2)) $ P.map (\n -> n <$ putStr (show n ++ " ")) [1,2,3]
 
 main = checkSuite

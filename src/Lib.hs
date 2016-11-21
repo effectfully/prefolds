@@ -20,7 +20,7 @@ import Control.Monad.Morph (MFunctor, hoist)
 
 infixr 9 .*, <.>, <.*>
 infixl 4 <+>, <$>>, <*>>, <+>>, +>
-infixl 1 >>#
+infixl 1 >>#, >>~, >~>
   
 (.*) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
 g .* f = \x y -> g (f x y)
@@ -80,6 +80,8 @@ class SumMonadTrans t where
   slift :: Monad m => m a -> t m a
 
 -- A variant of http://elvishjerricco.github.io/2016/10/12/kleisli-functors.html
+-- kmap return     === id
+-- kmap g . kmap f === kmap (f >=> g)
 class (Monad m, Functor f) => KleisliFunctor m f where
   kmap :: (a -> m b) -> f a -> f b
   kmap = kjoin .* fmap
@@ -104,3 +106,19 @@ h <+>> a = kjoin $ h <+> a
 instance Monad m => KleisliFunctor m m where
   kmap = (=<<)
   {-# INLINE kmap #-}
+
+-- These?
+-- a >>~ g . f     === fmap f a >>~ g
+-- a >>~ (f >=> g) === a >>~ f >>= g
+class (Functor f, Monad m) => Absorb f m where
+  (>>~) :: f a -> (a -> m b) -> m b
+  a >>~ f = ajoin $ fmap f a
+  {-# INLINE (>>~) #-}
+
+  ajoin :: f (m a) -> m a
+  ajoin a = a >>~ id
+  {-# INLINE ajoin #-}
+
+(>~>) :: Absorb f g => (a -> f b) -> (b -> g c) -> a -> g c
+f >~> g = \x -> f x >>~ g
+{-# INLINE (>~>) #-}
