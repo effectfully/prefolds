@@ -248,6 +248,7 @@ suite = do
     exec ((,,) <$> take 4 list <+> take 3 list </> take 2 list) [1..] === ([1..4],[1..3],[5..6])
     exec ((,) <$> sum <*> any even) [1..3] === (3,True)
     exec ((,) <$> sum <+> any even) [1..3] === (6,True)
+    exec (handles P.traverse $ take 5 sum) ([1..3] : repeat [4..]) === 15
   label "null" $ do
     exec null []             === True
     exec null [1]            === False
@@ -305,8 +306,5 @@ foldMN (>>~) f a g xs = a >>~ foldr (\mx r !a -> mx >>= \x -> f a x >>~ r) g xs
 test1 :: IO ()
 test1 = impurely foldMN (take 3 . traverse_ $ print . (^2)) $
          P.map (\n -> n <$ putStr (show n ++ " ")) [1..] where
-
--- 15
-test2 = print $ exec (handles P.traverse $ take 5 sum) $ [1..3] : repeat [4..]
 
 main = checkSuite
