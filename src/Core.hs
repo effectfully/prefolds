@@ -7,6 +7,7 @@ import Data.Strict.Tuple
 import Data.Strict.Drive
 import qualified Lib
 import qualified Pure
+import Data.Functor.Const
 import Control.Monad.Trans.Except
 
 infixl 4 </>, />, </>>, <//>, //>, <//>>
@@ -252,3 +253,20 @@ impurely :: Monad m
          -> Fold a m b -> c
 impurely h (Fold g f a) = h (flip $ driveTM g) f a g
 {-# INLINABLE impurely #-}
+
+newtype TraceT m a = TraceT { getTraceT :: a -> m a }
+
+instance MonoMonad m => Monoid (TraceT m a) where
+  mempty = TraceT mpure
+  {-# INLINE mempty #-}
+
+  TraceT f `mappend` TraceT g = TraceT (f >#> g)
+  {-# INLINE mappend #-}
+
+type Pattern m acc = Const (TraceT (DriveT m) acc)
+type Handler b m a = forall acc. (a -> Pattern m acc a) -> b -> Pattern m acc b
+
+handles :: Monad m => Handler b m a -> Fold a m c -> Fold b m c
+handles k (Fold g f a) = Fold g f' a where
+  f' = flip $ getTraceT . getConst . k (Const . TraceT . flip f)
+{-# INLINEABLE handles #-}

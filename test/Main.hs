@@ -302,8 +302,11 @@ foldMN (>>~) f a g xs = a >>~ foldr (\mx r !a -> mx >>= \x -> f a x >>~ r) g xs
 -- 1 1
 -- 2 4
 -- 3 9
-test :: IO ()
-test = impurely foldMN (take 3 . traverse_ $ print . (^2)) $
+test1 :: IO ()
+test1 = impurely foldMN (take 3 . traverse_ $ print . (^2)) $
          P.map (\n -> n <$ putStr (show n ++ " ")) [1..] where
+
+-- 15
+test2 = print $ exec (handles P.traverse $ take 5 sum) $ [1..3] : repeat [4..]
 
 main = checkSuite
