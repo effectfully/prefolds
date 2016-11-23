@@ -6,6 +6,21 @@ import Lib
 import Data.Traversable (foldMapDefault)
 import Control.Monad.Trans.Except (ExceptT(..))
 
+infixl 1 >>~, >~>
+
+class (Functor f, Functor g) => Absorb f g where
+  (>>~) :: f a -> (a -> g b) -> g b
+  a >>~ f = ajoin $ fmap f a
+  {-# INLINE (>>~) #-}
+
+  ajoin :: f (g a) -> g a
+  ajoin a = a >>~ id
+  {-# INLINE ajoin #-}
+
+(>~>) :: Absorb f m => (a -> f b) -> (b -> m c) -> a -> m c
+f >~> g = \x -> f x >>~ g
+{-# INLINE (>~>) #-}
+
 data Drive a = Stop !a | More !a
 
 drive :: (a -> b) -> (a -> b) -> Drive a -> b

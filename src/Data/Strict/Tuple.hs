@@ -15,6 +15,13 @@ instance Bifunctor Pair where
   bimap f g (Pair a b) = Pair (f a) (g b)
   {-# INLINE bimap #-}
 
+instance Monoid a => Applicative (Pair a) where
+  pure = Pair mempty
+  {-# INLINE pure #-}
+
+  Pair x1 g <*> Pair x2 y = Pair (x1 `mappend` x2) (g y)
+  {-# INLINE (<*>) #-}
+
 instance Functor (Triple a b) where
   fmap f (Triple a b c) = Triple a b (f c)
   {-# INLINE fmap #-}

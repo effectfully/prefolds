@@ -30,7 +30,7 @@ whnfFrom1 f = whnf (\n -> f n [n `seq` 1..])
 benchSum :: Benchmark
 benchSum = bgroup "sum"
   [ bench "Prefolds" $ whnfFrom1To (exec sum) (10^7)
-  , bench "Prelude"  $ whnfFrom1To  P.sum        (10^7)
+  , bench "Prelude"  $ whnfFrom1To  P.sum     (10^7)
   ]
 
 -- Prelude version is 20% slower.

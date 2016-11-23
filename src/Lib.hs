@@ -20,8 +20,8 @@ import Control.Monad.Morph (MFunctor, hoist)
 
 infixr 9 .*, <.>, <.*>
 infixl 4 <+>, <$>>, <*>>, <+>>, +>
-infixl 1 >>#, >>~, >~>
-  
+infixl 1 >>#, >#>
+
 (.*) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
 g .* f = \x y -> g (f x y)
 {-# INLINE (.*) #-}
@@ -71,6 +71,10 @@ class Functor m => MonoMonad m where
 
   (>>#) :: m a -> (a -> m a) -> m a
 
+(>#>) :: MonoMonad m => (a -> m a) -> (a -> m a) -> a -> m a
+f >#> g = \x -> f x >># g
+{-# INLINE (>#>) #-}
+
 -- Transforms a Monad into a MonoMonad.
 class MonoMonadTrans t where
   mlift :: Monad m => m a -> t m a
@@ -106,19 +110,3 @@ h <+>> a = kjoin $ h <+> a
 instance Monad m => KleisliFunctor m m where
   kmap = (=<<)
   {-# INLINE kmap #-}
-
--- These?
--- a >>~ g . f     === fmap f a >>~ g
--- a >>~ (f >=> g) === a >>~ f >>= g
-class (Functor f, Monad m) => Absorb f m where
-  (>>~) :: f a -> (a -> m b) -> m b
-  a >>~ f = ajoin $ fmap f a
-  {-# INLINE (>>~) #-}
-
-  ajoin :: f (m a) -> m a
-  ajoin a = a >>~ id
-  {-# INLINE ajoin #-}
-
-(>~>) :: Absorb f m => (a -> f b) -> (b -> m c) -> a -> m c
-f >~> g = \x -> f x >>~ g
-{-# INLINE (>~>) #-}
