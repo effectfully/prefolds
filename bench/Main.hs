@@ -19,11 +19,11 @@ nofail1 :: IO ()
 nofail1 = print . exec (span (+) (1 ==) sum sum) $ replicate (10^7) (1 :: Integer)
 
 whnfFrom1To :: ([Integer] -> b) -> Integer -> Benchmarkable
-whnfFrom1To f = whnf (f . enumFromTo 1)
+whnfFrom1To f = whnf $ f . enumFromTo 1
 {-# INLINE whnfFrom1To #-}
 
 whnfFrom1 :: (Int -> [Integer] -> b) -> Int -> Benchmarkable
-whnfFrom1 f = whnf (\n -> f n [n `seq` 1..])
+whnfFrom1 f = whnf $ \n -> f n [n `seq` 1..]
 {-# INLINE whnfFrom1 #-}
 
 -- Prelude version is 20% faster.

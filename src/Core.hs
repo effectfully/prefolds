@@ -7,23 +7,34 @@ import Data.Strict.Tuple
 import Data.Strict.Drive
 import qualified Lib
 import qualified Pure
-import Data.Functor.Const
-import Control.Monad.Trans.Except
 
 infixl 4 </>, />, </>>, <//>, //>, <//>>
 
 data Fold a m b = forall acc. Fold (acc -> m b) (acc -> a -> DriveT m acc) (DriveT m acc)
+
+saturated_consumed :: String -> a
+saturated_consumed name = error $ concat
+  [ "prefolds."
+  , name
+  , ": a saturated fold consumed an element. "
+  , "If you didn't define any functions that explicitly deal with `DriveT`, "
+  , "then please report this as a bug. "
+  , "If you did define such functions, "
+  , "then it's likely that one of them doesn't stop on `Stop`."
+  ]
+{-# NOINLINE saturated_consumed #-}
+-- I guess no reason to bloat code by inlining a function that throws an error?
 
 driveFold :: Monad m => (b -> a -> DriveT m b) -> DriveT m b -> Fold a m b
 driveFold = Fold pure
 {-# INLINEABLE driveFold #-}
 
 driveHalt :: Monad m => DriveT m b -> Fold a m b
-driveHalt = driveFold (error "prefolds.driveHalt: something went wrong")
+driveHalt = driveFold $ saturated_consumed "driveHalt"
 {-# INLINABLE driveHalt #-}
 
 driveMore :: Monad m => DriveT m b -> Fold a m b
-driveMore = driveFold (more .* const)
+driveMore = driveFold $ more .* const
 {-# INLINABLE driveMore #-}
 
 instance Monad m => Functor (Fold a m) where
@@ -149,7 +160,7 @@ span_ = span (const id)
 take :: Monad m => Int -> Fold a m b -> Fold a m b
 take n (Fold g f a) = Fold (g . sndp) step acc where
   acc = terminateWhen ((<= 0) . fstp) $ Pair n <$> a
-  step (Pair n a) x | n <= 0    = error "prefolds.take: something went wrong"
+  step (Pair n a) x | n <= 0    = saturated_consumed "take"
                     | n == 1    = terminate $ Pair 0 <$> f a x
                     | otherwise = Pair (n - 1) <$> f a x
 {-# INLINABLE take #-}
@@ -249,24 +260,33 @@ exec = runIdentity .* execM
 
 impurely :: Monad m
          => (forall acc. (DriveT m acc -> (acc -> m b) -> m b) ->
-               (acc -> a -> DriveT m acc) -> DriveT m acc -> (acc -> m b) -> c)
+               (acc -> m b) -> (acc -> a -> DriveT m acc) -> DriveT m acc -> c)
          -> Fold a m b -> c
-impurely h (Fold g f a) = h (flip $ driveTM g) f a g
+impurely h (Fold g f a) = h (flip $ driveTM g) g f a
 {-# INLINABLE impurely #-}
 
-newtype TraceT m a = TraceT { getTraceT :: a -> m a }
+impurelyRest :: Monad m
+             => (forall acc. (forall b. (acc -> m b) -> (acc -> m b) -> DriveT m acc -> m b) ->
+                   (acc -> m b) -> (acc -> a -> DriveT m acc) -> DriveT m acc -> c)
+             -> Fold a m b -> c
+impurelyRest h (Fold g f a) = h driveTM g f a
+{-# INLINABLE impurelyRest #-}
 
-instance MonoMonad m => Monoid (TraceT m a) where
-  mempty = TraceT mpure
-  {-# INLINE mempty #-}
+newtype Pattern m a z = Pattern { getPattern :: a -> DriveT m a }
 
-  TraceT f `mappend` TraceT g = TraceT (f >#> g)
-  {-# INLINE mappend #-}
+instance Functor (Pattern m acc) where
+  fmap _ (Pattern f) = Pattern f
+  {-# INLINE fmap #-}
 
-type Pattern m acc = Const (TraceT (DriveT m) acc)
+instance Monad m => Applicative (Pattern m acc) where
+  pure x = Pattern mpure
+  {-# INLINE pure #-}
+
+  Pattern f <*> Pattern g = Pattern (f >#> g)
+  {-# INLINE (<*>) #-}
+
 type Handler b m a = forall acc. (a -> Pattern m acc a) -> b -> Pattern m acc b
 
-handles :: Monad m => Handler b m a -> Fold a m c -> Fold b m c
-handles k (Fold g f a) = Fold g f' a where
-  f' = flip $ getTraceT . getConst . k (Const . TraceT . flip f)
-{-# INLINEABLE handles #-}
+handle :: Monad m => Handler b m a -> Fold a m c -> Fold b m c
+handle k (Fold g f a) = Fold g (flip $ getPattern . k (Pattern . flip f)) a
+{-# INLINEABLE handle #-}
