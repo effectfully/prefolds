@@ -52,6 +52,8 @@ suite = do
     perf (take 2) [1..3]            === [1,2]
     perf (take 3) [1..3]            === [1..3]
     perf (take 3) [1..]             === [1..3]
+    -- Unlike `take 0 undefined`, so `execM` is too strict.
+    perf (take 0) (1:undefined)     === ([] :: [Int])
     perf (take 3) (1:2:3:undefined) === [1..3]
   label "filter" $ do
     perf (filter even) []      === []
@@ -239,16 +241,18 @@ suite = do
         exec ((,) <$> take 3 list <//> take 4 list) [1..]  === ([1..3],[3..6])
         exec ((,) <$> take 4 list <//> take 3 list) [1..]  === ([1..4],[4..6])
         exec ((,) <$> take 4 list <//> take 4 list) [1..]  === ([1..4],[4..7])
-  label "random" $ do
-    perf (takeWhile (< 10) . dropWhile (<= 3) . filter even)    [1..] === [4,6,8]
-    exec ((,) <$> take 4 list <+> (drop 2 . take 4) list)       [1..] === ([1..4],[3..6])
-    perf (filter even . scan sum . take 6 . dropWhile (<= 10))  [1..] === [12,20,30]
-    exec ((,,) <$> take 4 list <+> take 3 list <*> take 2 list) [1..] === ([1..2],[1..2],[1..2])
-    exec ((,,) <$> take 4 list <+> take 3 list <*> take 5 list) [1..] === ([1..4],[1..3],[1..4])
-    exec ((,,) <$> take 4 list <+> take 3 list </> take 2 list) [1..] === ([1..4],[1..3],[5..6])
-    exec ((,) <$> sum <*> any even) [1..3] === (3,True)
-    exec ((,) <$> sum <+> any even) [1..3] === (6,True)
-    exec (handle P.traverse $ take 5 sum) ([1..3] : repeat [4..]) === 15
+    label "bind" $ do
+      label "degenerate" $ do
+        exec (take 0 sum >>= \n -> (,) n <$> take n list) []     === (0, [])
+        exec (take 0 sum >>= \n -> (,) n <$> take n list) [1..3] === (0, [])
+        exec (take 3 sum >>= \n -> (,) n <$> take n list) []     === (0, [])
+        exec (take 3 sum >>= \n -> (,) n <$> take n list) [1..3] === (6, [])
+      label "basic" $ do
+        exec (take 0 sum >>= \n -> (,) n <$> take 2 list) [1..3] === (0, [1,2])
+        exec (take 0 sum >>= \n -> (,) n <$> take 4 list) [1..3] === (0, [1..3])
+        exec (take 2 sum >>= \n -> (,) n <$> take n list) [1..3] === (3, [3])
+        exec (take 2 sum >>= \n -> (,) n <$> take n list) [1..5] === (3, [3..5])
+        exec (take 2 sum >>= \n -> (,) n <$> take n list) [1..6] === (3, [3..5])
   label "null" $ do
     exec null []             === True
     exec null [1]            === False
@@ -292,6 +296,16 @@ suite = do
     exec last []     === (Nothing :: Maybe Int)
     exec last [1]    === Just 1
     exec last [1..5] === Just 5
+  label "random" $ do
+    perf (takeWhile (< 10) . dropWhile (<= 3) . filter even)    [1..] === [4,6,8]
+    exec ((,) <$> take 4 list <+> (drop 2 . take 4) list)       [1..] === ([1..4],[3..6])
+    perf (filter even . scan sum . take 6 . dropWhile (<= 10))  [1..] === [12,20,30]
+    exec ((,,) <$> take 4 list <+> take 3 list <*> take 2 list) [1..] === ([1..2],[1..2],[1..2])
+    exec ((,,) <$> take 4 list <+> take 3 list <*> take 5 list) [1..] === ([1..4],[1..3],[1..4])
+    exec ((,,) <$> take 4 list <+> take 3 list </> take 2 list) [1..] === ([1..4],[1..3],[5..6])
+    exec ((,) <$> sum <*> any even) [1..3] === (3,True)
+    exec ((,) <$> sum <+> any even) [1..3] === (6,True)
+    exec (handle P.traverse $ take 5 sum) ([1..3] : repeat [4..]) === 15
 
 checkSuite :: IO ()
 checkSuite = putStrLn $ runSuite suite
@@ -306,5 +320,8 @@ foldMN (>>~) g f a xs = a >>~ foldr (\mx r !a -> mx >>= \x -> f a x >>~ r) g xs
 test1 :: IO ()
 test1 = impurely foldMN (take 3 . traverse_ $ print . (^2)) $
           P.map (\n -> n <$ putStr (show n ++ " ")) [1..] where
+
+test2 :: [Int]
+test2 = exec (take 10 sum >>= \n -> take n list) [1..8]
 
 main = checkSuite

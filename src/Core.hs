@@ -69,6 +69,16 @@ instance Monad m => SumApplicative (Fold a m) where
     final (Pair a1' a2') = (a1' >>~ g1) <*> (a2' >>~ g2)
   {-# INLINABLE (<+>) #-}
 
+instance Monad m => Monad (Fold a m) where
+  Fold g1 f1 a1 >>= h = Fold final step (left a1) where
+    left = keep . driveTM (\a1' -> Right . h <$> g1 a1') (return . Left)
+
+    step (Left a1') x = left $ f1 a1' x
+    step (Right f2) x = Right <$> feed x f2
+
+    final (Left a1') = g1 a1' >>= runFold . h
+    final (Right f2) = runFold f2
+
 instance MonoMonadTrans (Fold a) where
   mlift = driveHalt . mlift
   {-# INLINABLE mlift #-}
@@ -95,9 +105,9 @@ combine c (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
 
   step (Triple b a1' a2') x
     | b         = a2' >># flip f2 x =>> Triple True a1'
-    | otherwise = bindDriveT (\a1'' -> c (>># flip f2 x) a2' =>> Triple True a1'')
-                             (\a1'' -> more $ Triple False a1'' a2')
-                             (f1 a1' x)
+    | otherwise = driveDriveT (\a1'' -> c (>># flip f2 x) a2' =>> Triple True a1'')
+                              (\a1'' -> more $ Triple False a1'' a2')
+                              (f1 a1' x)
 
   final (Triple b a1' a2') = g1 a1' <*> (a2' >>~ g2)
 {-# INLINABLE combine #-}
@@ -225,9 +235,9 @@ chunks :: Monad m => Fold a m b -> Fold b m c -> Fold a m c
 chunks (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step (init a2) where
   init a2' = Triple False <$> a1 <*> duplicate a2'
 
-  step (Triple _ a1' a2') x = bindDriveT (\a1'' -> init $ cross (g1 a1'') a2' f2)
-                                         (\a1'' -> more $ Triple True a1'' a2')
-                                         (f1 a1' x)
+  step (Triple _ a1' a2') x = driveDriveT (\a1'' -> init $ cross (g1 a1'') a2' f2)
+                                          (\a1'' -> more $ Triple True a1'' a2')
+                                          (f1 a1' x)
 
   final (Triple b a1' a2') = (if b then cross (g1 a1') a2' f2 else a2') >>~ g2
 {-# INLINABLE chunks #-}

@@ -118,9 +118,9 @@ runDriveT :: Functor f => DriveT f a -> f a
 runDriveT (DriveT a) = runDrive <$> a
 {-# INLINEABLE runDriveT #-}
 
-bindDriveT :: Monad m => (a -> DriveT m b) -> (a -> DriveT m b) -> DriveT m a -> DriveT m b
-bindDriveT f g (DriveT a) = a >>~ drive f g
-{-# INLINABLE bindDriveT #-}
+driveDriveT :: Monad m => (a -> DriveT m b) -> (a -> DriveT m b) -> DriveT m a -> DriveT m b
+driveDriveT f g (DriveT a) = a >>~ drive f g
+{-# INLINABLE driveDriveT #-}
 
 isStopT :: Functor f => DriveT f a -> f Bool
 isStopT (DriveT a) = isStop <$> a
@@ -186,12 +186,12 @@ instance Applicative f => SumApplicative (DriveT f) where
   {-# INLINEABLE (<+>) #-}
 
 instance Monad m => MonoMonad (DriveT m) where
-  a >># f = bindDriveT halt f a
+  a >># f = driveDriveT halt f a
   {-# INLINABLE (>>#) #-}
 
-instance Monad m => Monad (DriveT m) where
-  DriveT a >>= f = DriveT . fmap  join . join $ traverse (getDriveT . f) <$> a
-  {-# INLINABLE (>>=) #-}
+-- instance Monad m => Monad (DriveT m) where
+--   DriveT a >>= f = DriveT . fmap  join . join $ traverse (getDriveT . f) <$> a
+--   {-# INLINABLE (>>=) #-}
 
 instance Monad m => SumMonad (DriveT m) where
   DriveT a >>+ f = DriveT . fmap sjoin . join $ traverse (getDriveT . f) <$> a
@@ -201,7 +201,7 @@ instance Monad m => Comonad (DriveT m) where
   extract  = error "there is no `extract` for `DriveT m` unless `m` is a comonad, \
                    \ but this is not needed for `extend`, which is more important than `extract`"
 
-  extend f = bindDriveT (halt . f . halt) (more . f . more)
+  extend f = driveDriveT (halt . f . halt) (more . f . more)
   {-# INLINABLE extend #-}
 
 instance MonoMonadTrans DriveT where

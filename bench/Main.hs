@@ -75,8 +75,8 @@ benchSlowAverageTake = bgroup "slowAverageTake"
 -- Prelude version is almost two times faster.
 benchScan :: Benchmark
 benchScan = bgroup "scan"
-  [ bench "Prefolds.scan" $ whnfFrom1To (exec $ scan sum sum)    (10^6)
-  , bench "Prelude.scan"  $ whnfFrom1To (P.sum . P.scanl' (+) 0) (10^6)
+  [ bench "Prefolds.scan" $ whnfFrom1To (exec $ scan sum sum)    (10^7)
+  , bench "Prelude.scan"  $ whnfFrom1To (P.sum . P.scanl' (+) 0) (10^7)
   ]
 
 -- Prefolds versions are nearly equal, Prelude versions are two times faster.
@@ -101,7 +101,7 @@ benchGroup = bgroup "group"
 
 -- Prelude versions are two orders of magnitude slower, but they leak and I don't see why.
 benchInits :: Benchmark
-benchInits = bgroup "scan"
+benchInits = bgroup "inits"
   [ bench "Prefolds.inits"    $ whnfFrom1 (\n -> exec $ inits sum (take n sum))              (10^3)
   , bench "Prelude.inits"     $ whnfFrom1 (\n -> P.sum . P.take n . P.map P.sum . P.inits)   (10^3)
   , bench "Prelude.lazyInits" $ whnfFrom1 (\n -> P.sum . P.take n . P.map P.sum . lazyInits) (10^3)
@@ -109,6 +109,12 @@ benchInits = bgroup "scan"
       lazyInits :: [a] -> [[a]]
       lazyInits = foldr (\x -> ([] :) . P.map (x:)) [[]]
 
+benchBind :: Benchmark
+benchBind = bgroup "bind"
+  [ bench "Prefolds.bind"   $ whnfFrom1 (\n -> exec $ take 0 sum >> take n sum) (10^7)
+  , bench "Prefolds.nobind" $ whnfFrom1 (\n -> exec $               take n sum) (10^7)
+  ]
+  
 suite :: [Benchmark]
 suite =
   [ benchSum
@@ -119,6 +125,7 @@ suite =
   , benchScanTake
   , benchGroup
   , benchInits
+  , benchBind
   ]
 
 benchSuite :: IO ()
