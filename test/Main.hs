@@ -196,16 +196,16 @@ suite = do
   label "compose" $ do
     label "parallel" $ do
       label "product" $ do
-        exec ((,) <$> list        <*> list)        []     === ([],[] :: [Int])
-        exec ((,) <$> list        <*> list)        [1..4] === ([1..4],[1..4])
-        exec ((,) <$> take 3 list <*> list)        [1..4] === ([1..3],[1..3])
-        exec ((,) <$> list        <*> take 3 list) [1..4] === ([1..3],[1..3])
-        exec ((,) <$> take 0 list <*> take 1 list) [1..]  === ([],[])
-        exec ((,) <$> take 1 list <*> take 0 list) [1..]  === ([],[])
-        exec ((,) <$> take 1 list <*> take 1 list) [1..]  === ([1],[1])
-        exec ((,) <$> take 3 list <*> take 4 list) [1..]  === ([1..3],[1..3])
-        exec ((,) <$> take 4 list <*> take 3 list) [1..]  === ([1..3],[1..3])
-        exec ((,) <$> take 4 list <*> take 4 list) [1..]  === ([1..4],[1..4])
+        exec ((,) <$> list        <&> list)        []     === ([],[] :: [Int])
+        exec ((,) <$> list        <&> list)        [1..4] === ([1..4],[1..4])
+        exec ((,) <$> take 3 list <&> list)        [1..4] === ([1..3],[1..3])
+        exec ((,) <$> list        <&> take 3 list) [1..4] === ([1..3],[1..3])
+        exec ((,) <$> take 0 list <&> take 1 list) [1..]  === ([],[])
+        exec ((,) <$> take 1 list <&> take 0 list) [1..]  === ([],[])
+        exec ((,) <$> take 1 list <&> take 1 list) [1..]  === ([1],[1])
+        exec ((,) <$> take 3 list <&> take 4 list) [1..]  === ([1..3],[1..3])
+        exec ((,) <$> take 4 list <&> take 3 list) [1..]  === ([1..3],[1..3])
+        exec ((,) <$> take 4 list <&> take 4 list) [1..]  === ([1..4],[1..4])
       label "sum" $ do
         exec ((,) <$> list        <+> list)        []     === ([],[] :: [Int])
         exec ((,) <$> list        <+> list)        [1..4] === ([1..4],[1..4])
@@ -219,27 +219,27 @@ suite = do
         exec ((,) <$> take 4 list <+> take 4 list) [1..]  === ([1..4],[1..4])
     label "sequential" $ do
       label "connect" $ do
+        exec ((,) <$> list        <*> list)        []     === ([],[] :: [Int])
+        exec ((,) <$> list        <*> list)        [1..4] === ([1..4],[])
+        exec ((,) <$> take 3 list <*> list)        [1..4] === ([1..3],[4])
+        exec ((,) <$> list        <*> take 3 list) [1..4] === ([1..4],[])
+        exec ((,) <$> take 0 list <*> take 1 list) [1..]  === ([],[1])
+        exec ((,) <$> take 1 list <*> take 0 list) [1..]  === ([1],[])
+        exec ((,) <$> take 1 list <*> take 1 list) [1..]  === ([1],[2])
+        exec ((,) <$> take 3 list <*> take 4 list) [1..]  === ([1..3],[4..7])
+        exec ((,) <$> take 4 list <*> take 3 list) [1..]  === ([1..4],[5..7])
+        exec ((,) <$> take 4 list <*> take 4 list) [1..]  === ([1..4],[5..8])
+      label "weld" $ do
         exec ((,) <$> list        </> list)        []     === ([],[] :: [Int])
-        exec ((,) <$> list        </> list)        [1..4] === ([1..4],[])
-        exec ((,) <$> take 3 list </> list)        [1..4] === ([1..3],[4])
-        exec ((,) <$> list        </> take 3 list) [1..4] === ([1..4],[])
+        exec ((,) <$> list        </> list)        [1..4] === ([1..4],[]) -- Sic.
+        exec ((,) <$> take 3 list </> list)        [1..4] === ([1..3],[3,4])
+        exec ((,) <$> list        </> take 3 list) [1..4] === ([1..4],[]) -- Sic.
         exec ((,) <$> take 0 list </> take 1 list) [1..]  === ([],[1])
         exec ((,) <$> take 1 list </> take 0 list) [1..]  === ([1],[])
-        exec ((,) <$> take 1 list </> take 1 list) [1..]  === ([1],[2])
-        exec ((,) <$> take 3 list </> take 4 list) [1..]  === ([1..3],[4..7])
-        exec ((,) <$> take 4 list </> take 3 list) [1..]  === ([1..4],[5..7])
-        exec ((,) <$> take 4 list </> take 4 list) [1..]  === ([1..4],[5..8])
-      label "weld" $ do
-        exec ((,) <$> list        <//> list)        []     === ([],[] :: [Int])
-        exec ((,) <$> list        <//> list)        [1..4] === ([1..4],[]) -- Sic.
-        exec ((,) <$> take 3 list <//> list)        [1..4] === ([1..3],[3,4])
-        exec ((,) <$> list        <//> take 3 list) [1..4] === ([1..4],[]) -- Sic.
-        exec ((,) <$> take 0 list <//> take 1 list) [1..]  === ([],[1])
-        exec ((,) <$> take 1 list <//> take 0 list) [1..]  === ([1],[])
-        exec ((,) <$> take 1 list <//> take 1 list) [1..]  === ([1],[1])
-        exec ((,) <$> take 3 list <//> take 4 list) [1..]  === ([1..3],[3..6])
-        exec ((,) <$> take 4 list <//> take 3 list) [1..]  === ([1..4],[4..6])
-        exec ((,) <$> take 4 list <//> take 4 list) [1..]  === ([1..4],[4..7])
+        exec ((,) <$> take 1 list </> take 1 list) [1..]  === ([1],[1])
+        exec ((,) <$> take 3 list </> take 4 list) [1..]  === ([1..3],[3..6])
+        exec ((,) <$> take 4 list </> take 3 list) [1..]  === ([1..4],[4..6])
+        exec ((,) <$> take 4 list </> take 4 list) [1..]  === ([1..4],[4..7])
     label "bind" $ do
       label "degenerate" $ do
         exec (take 0 sum >>= \n -> (,) n <$> take n list) []     === (0, [])
@@ -299,10 +299,10 @@ suite = do
     perf (takeWhile (< 10) . dropWhile (<= 3) . filter even)    [1..] === [4,6,8]
     exec ((,) <$> take 4 list <+> (drop 2 . take 4) list)       [1..] === ([1..4],[3..6])
     perf (filter even . scan sum . take 6 . dropWhile (<= 10))  [1..] === [12,20,30]
-    exec ((,,) <$> take 4 list <+> take 3 list <*> take 2 list) [1..] === ([1..2],[1..2],[1..2])
-    exec ((,,) <$> take 4 list <+> take 3 list <*> take 5 list) [1..] === ([1..4],[1..3],[1..4])
-    exec ((,,) <$> take 4 list <+> take 3 list </> take 2 list) [1..] === ([1..4],[1..3],[5..6])
-    exec ((,) <$> sum <*> any even) [1..3] === (3,True)
+    exec ((,,) <$> take 4 list <+> take 3 list <&> take 2 list) [1..] === ([1..2],[1..2],[1..2])
+    exec ((,,) <$> take 4 list <+> take 3 list <&> take 5 list) [1..] === ([1..4],[1..3],[1..4])
+    exec ((,,) <$> take 4 list <+> take 3 list <*> take 2 list) [1..] === ([1..4],[1..3],[5..6])
+    exec ((,) <$> sum <&> any even) [1..3] === (3,True)
     exec ((,) <$> sum <+> any even) [1..3] === (6,True)
     exec (handle P.traverse $ take 5 sum) ([1..3] : repeat [4..]) === 15
 
@@ -319,8 +319,5 @@ foldMN (>>~) g f a xs = a >>~ foldr (\mx r !a -> mx >>= \x -> f a x >>~ r) g xs
 test1 :: IO ()
 test1 = impurely foldMN (take 3 . traverse_ $ print . (^2)) $
           P.map (\n -> n <$ putStr (show n ++ " ")) [1..] where
-
-test2 :: [Int]
-test2 = exec (take 10 sum >>= \n -> take n list) [1..8]
 
 main = checkSuite

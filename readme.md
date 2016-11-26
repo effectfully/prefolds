@@ -1,5 +1,7 @@
 # prefolds
 
+The readme is outdated. The type class hiararchy was changed.
+
 ## Disclaimer
 
 This is my first attempt to write something usable in Haskell. Any kind of feedback is highly appreciated.

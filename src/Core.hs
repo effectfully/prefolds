@@ -8,7 +8,7 @@ import Data.Strict.Drive
 import qualified Lib
 import qualified Pure
 
-infixl 4 </>, />, </>>, <//>, //>, <//>>
+infixl 4 </>, />, </>>
 
 data Fold a m b = forall acc. Fold (acc -> m b) (acc -> a -> DriveT m acc) (DriveT m acc)
 
@@ -47,16 +47,40 @@ instance Monad m => KleisliFunctor m (Fold a m) where
   kmap h (Fold g f a) = Fold (g >=> h) f a
   {-# INLINEABLE kmap #-}
 
+combine :: Monad m
+        => (forall a. (a -> a) -> a -> a)
+        -> Fold a m (b -> c) -> Fold a m b -> Fold a m c
+combine c (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
+  acc = isStopT a1 >>~ \b -> Triple b <$> a1 <+> a2
+
+  step (Triple b a1' a2') x
+    | b         = Triple True a1' <$> f2 a2' x
+    | otherwise = driveDriveT (\a1'' -> Triple True a1'' <$> c (>># flip f2 x) a2)
+                              (\a1'' -> more $ Triple False a1'' a2')
+                              (f1 a1' x)
+
+  final (Triple b a1' a2') = g1 a1' <*> g2 a2'
+{-# INLINABLE combine #-}
+
+(</>) :: Monad m => Fold a m (b -> c) -> Fold a m b -> Fold a m c
+(</>) = combine id
+{-# INLINEABLE (</>) #-}
+
+(/>) :: Monad m => Fold a m b -> Fold a m c -> Fold a m c
+b /> c = const id <$> b </> c
+{-# INLINEABLE (/>) #-}
+
+(</>>) :: Monad m => Fold a m (b -> m c) -> Fold a m b -> Fold a m c
+(</>>) = kjoin .* (</>)
+{-# INLINEABLE (</>>) #-}
+
 instance Monad m => Applicative (Fold a m) where
-  pure = driveMore . pure
+  pure = driveHalt . spure
   {-# INLINABLE pure #-}
 
-  Fold g1 f1 a1 <*> Fold g2 f2 a2 = Fold final step (Pair <$> a1 <*> a2) where
-    step (Pair a1' a2') x = Pair <$> f1 a1' x <*> f2 a2' x
-
-    final (Pair a1' a2') = g1 a1' <*> g2 a2'
+  (<*>) = combine (const id)
   {-# INLINABLE (<*>) #-}
-
+  
 instance Monad m => SumApplicative (Fold a m) where
   spure = driveHalt . spure
   {-# INLINABLE spure #-}
@@ -68,6 +92,16 @@ instance Monad m => SumApplicative (Fold a m) where
 
     final (Pair a1' a2') = (a1' >>~ g1) <*> (a2' >>~ g2)
   {-# INLINABLE (<+>) #-}
+
+instance Monad m => AndApplicative (Fold a m) where
+  apure = driveMore . apure
+  {-# INLINABLE apure #-}
+
+  Fold g1 f1 a1 <&> Fold g2 f2 a2 = Fold final step (Pair <$> a1 <&> a2) where
+    step (Pair a1' a2') x = Pair <$> f1 a1' x <&> f2 a2' x
+
+    final (Pair a1' a2') = g1 a1' <*> g2 a2'
+  {-# INLINABLE (<&>) #-}
 
 -- There isn't much point in making `acc` strict I guess, but it costs nothing, so why not.
 data FoldMore a m b = forall acc. FoldMore (acc -> m b) (acc -> a -> DriveT m acc) !acc
@@ -84,8 +118,6 @@ feedFoldMore :: Functor m => a -> FoldMore a m b -> DriveT m (FoldMore a m b)
 feedFoldMore x (FoldMore g f a) = FoldMore g f <$> f a x
 {-# INLINEABLE feedFoldMore #-}
 
--- This doesn't agree with the Applicative instance.
--- So we need yet another Applicative-Monad hierarchy and reshuffle the instances.
 instance Monad m => Monad (Fold a m) where
   Fold g1 f1 a1 >>= h = Fold final step (left a1) where
     left = driveDriveT (g1 >~> Right <.> toFoldMore . h) (more . Left)
@@ -97,13 +129,13 @@ instance Monad m => Monad (Fold a m) where
     final (Right f2) = runFoldMore f2
   {-# INLINABLE (>>=) #-}
 
-instance MonoMonadTrans (Fold a) where
-  mlift = driveHalt . mlift
-  {-# INLINABLE mlift #-}
-
-instance SumMonadTrans  (Fold a) where
+instance SumMonadTrans (Fold a) where
   slift = driveMore . slift
   {-# INLINABLE slift #-}
+
+instance AndMonadTrans (Fold a) where
+  mlift = driveHalt . mlift
+  {-# INLINABLE mlift #-}
 
 instance MFunctor (Fold a) where
   hoist h (Fold g f a) = Fold (h . g) (hoist h .* f) (hoist h a)
@@ -116,44 +148,6 @@ runFold (Fold g f a) = a >>~ g
 feedFold :: Monad m => a -> Fold a m b -> DriveT m (Fold a m b)
 feedFold x (Fold g f a) = a >># flip f x =>> Fold g f
 {-# INLINEABLE feedFold #-}
-
--- Rewrite in the style of the Monad instance above.
-combine :: Monad m => (forall a. (a -> a) -> a -> a) -> Fold a m (b -> c) -> Fold a m b -> Fold a m c
-combine c (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
-  acc = isStopT a1 >>~ \b -> Triple b <$> a1 <+> duplicate a2
-
-  step (Triple b a1' a2') x
-    | b         = a2' >># flip f2 x =>> Triple True a1'
-    | otherwise = driveDriveT (\a1'' -> c (>># flip f2 x) a2' =>> Triple True a1'')
-                              (\a1'' -> more $ Triple False a1'' a2')
-                              (f1 a1' x)
-
-  final (Triple b a1' a2') = g1 a1' <*> (a2' >>~ g2)
-{-# INLINABLE combine #-}
-
-(</>) :: Monad m => Fold a m (b -> c) -> Fold a m b -> Fold a m c
-(</>) = combine (const id)
-{-# INLINEABLE (</>) #-}
-
-(/>) :: Monad m => Fold a m b -> Fold a m c -> Fold a m c
-b /> c = const id <$> b </> c
-{-# INLINEABLE (/>) #-}
-
-(</>>) :: Monad m => Fold a m (b -> m c) -> Fold a m b -> Fold a m c
-(</>>) = kjoin .* (</>)
-{-# INLINEABLE (</>>) #-}
-
-(<//>) :: Monad m => Fold a m (b -> c) -> Fold a m b -> Fold a m c
-(<//>) = combine id
-{-# INLINEABLE (<//>) #-}
-
-(//>) :: Monad m => Fold a m b -> Fold a m c -> Fold a m c
-b //> c = const id <$> b <//> c
-{-# INLINEABLE (//>) #-}
-
-(<//>>) :: Monad m => Fold a m (b -> m c) -> Fold a m b -> Fold a m c
-(<//>>) = kjoin .* (<//>)
-{-# INLINEABLE (<//>>) #-}
 
 map :: Monad m => (b -> a) -> Fold a m c -> Fold b m c
 map h (Fold g f a) = Fold g (\a -> f a . h) a
@@ -175,7 +169,7 @@ dropWhile p (Fold g f a) = Fold (g . sndp) step (Pair False <$> a) where
 {-# INLINABLE dropWhile #-}
 
 spanM :: Monad m => (b -> c -> m d) -> (a -> Bool) -> Fold a m b -> Fold a m c -> Fold a m d
-spanM h p b c = h <$> takeWhile p b <//>> c
+spanM h p b c = h <$> takeWhile p b </>> c
 {-# INLINEABLE spanM #-}
 
 span :: Monad m => (b -> c -> d) -> (a -> Bool) -> Fold a m b -> Fold a m c -> Fold a m d
@@ -187,11 +181,11 @@ span_ = span (const id)
 {-# INLINEABLE span_ #-}
 
 take :: Monad m => Int -> Fold a m b -> Fold a m b
-take n (Fold g f a) = Fold (g . sndp) step acc where
-  acc = terminateWhen ((<= 0) . fstp) $ Pair n <$> a
+take n (Fold g f a) = Fold (g . sndp) step (finish n a) where
+  finish n a = terminateWhen ((<= 0) . fstp) $ Pair n <$> a
+
   step (Pair n a) x | n <= 0    = saturated_consumed "take"
-                    | n == 1    = terminate $ Pair 0 <$> f a x
-                    | otherwise = Pair (n - 1) <$> f a x
+                    | otherwise = finish (n - 1) $ f a x
 {-# INLINABLE take #-}
   
 drop :: Monad m => Int -> Fold a m b -> Fold a m b
@@ -206,7 +200,7 @@ cross a b f = a >>~ \x -> b >># flip f x
 
 scan :: Monad m => Fold a m b -> Fold b m c -> Fold a m c
 scan (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step (pair a1 a2) where
-  pair a1 a2 = Pair <$> a1 <*> duplicate a2
+  pair a1 a2 = Pair <$> a1 <&> duplicate a2
 
   step (Pair a1' a2') x = pair (f1 a1' x) $ cross (g1 a1') a2' f2
 
@@ -253,7 +247,7 @@ inits (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step (a2 =>> Pair a1) where
 
 chunks :: Monad m => Fold a m b -> Fold b m c -> Fold a m c
 chunks (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step (init a2) where
-  init a2' = Triple False <$> a1 <*> duplicate a2'
+  init a2' = Triple False <$> a1 <&> duplicate a2'
 
   step (Triple _ a1' a2') x = driveDriveT (\a1'' -> init $ cross (g1 a1'') a2' f2)
                                           (\a1'' -> more $ Triple True a1'' a2')

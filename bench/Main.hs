@@ -109,12 +109,12 @@ benchInits = bgroup "inits"
       lazyInits :: [a] -> [[a]]
       lazyInits = foldr (\x -> ([] :) . P.map (x:)) [[]]
 
--- `Prefolds.bind` and `Prefolds.connect` are 15% slower.
+-- `Prefolds.bind` and `Prefolds.apply` are 15% slower.
 benchBind :: Benchmark
 benchBind = bgroup "bind"
-  [ bench "Prefolds.bind"    $ whnfFrom1 (\n -> exec $ take 0 sum >> take n sum) (10^6)
-  , bench "Prefolds.connect" $ whnfFrom1 (\n -> exec $ take 0 sum /> take n sum) (10^6)
-  , bench "Prefolds.nobind"  $ whnfFrom1 (\n -> exec $               take n sum) (10^6)
+  [ bench "Prefolds.bind"   $ whnfFrom1 (\n -> exec $ take 0 sum >> take n sum) (10^6)
+  , bench "Prefolds.apply"  $ whnfFrom1 (\n -> exec $ take 0 sum *> take n sum) (10^6)
+  , bench "Prefolds.nobind" $ whnfFrom1 (\n -> exec $               take n sum) (10^6)
   ]
   
 suite :: [Benchmark]
