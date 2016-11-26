@@ -69,15 +69,33 @@ instance Monad m => SumApplicative (Fold a m) where
     final (Pair a1' a2') = (a1' >>~ g1) <*> (a2' >>~ g2)
   {-# INLINABLE (<+>) #-}
 
+-- There isn't much point in making `acc` strict I guess, but it costs nothing, so why not.
+data FoldMore a m b = forall acc. FoldMore (acc -> m b) (acc -> a -> DriveT m acc) !acc
+
+runFoldMore :: FoldMore a m b -> m b
+runFoldMore (FoldMore g f a) = g a
+{-# INLINEABLE runFoldMore #-}
+
+toFoldMore :: Functor m => Fold a m b -> DriveT m (FoldMore a m b)
+toFoldMore (Fold g f (DriveT a)) = DriveT $ fmap (FoldMore g f) <$> a
+{-# INLINEABLE toFoldMore #-}
+
+feedFoldMore :: Functor m => a -> FoldMore a m b -> DriveT m (FoldMore a m b)
+feedFoldMore x (FoldMore g f a) = FoldMore g f <$> f a x
+{-# INLINEABLE feedFoldMore #-}
+
+-- This doesn't agree with the Applicative instance.
+-- So we need yet another Applicative-Monad hierarchy and reshuffle the instances.
 instance Monad m => Monad (Fold a m) where
   Fold g1 f1 a1 >>= h = Fold final step (left a1) where
-    left = keep . driveTM (\a1' -> Right . h <$> g1 a1') (return . Left)
+    left = driveDriveT (g1 >~> Right <.> toFoldMore . h) (more . Left)
 
     step (Left a1') x = left $ f1 a1' x
-    step (Right f2) x = Right <$> feed x f2
+    step (Right f2) x = Right <$> feedFoldMore x f2
 
     final (Left a1') = g1 a1' >>= runFold . h
-    final (Right f2) = runFold f2
+    final (Right f2) = runFoldMore f2
+  {-# INLINABLE (>>=) #-}
 
 instance MonoMonadTrans (Fold a) where
   mlift = driveHalt . mlift
@@ -95,10 +113,11 @@ runFold :: Monad m => Fold a m b -> m b
 runFold (Fold g f a) = a >>~ g
 {-# INLINEABLE runFold #-}
 
-feed :: Monad m => a -> Fold a m b -> DriveT m (Fold a m b)
-feed x (Fold g f a) = a >># flip f x =>> Fold g f
-{-# INLINEABLE feed #-}
+feedFold :: Monad m => a -> Fold a m b -> DriveT m (Fold a m b)
+feedFold x (Fold g f a) = a >># flip f x =>> Fold g f
+{-# INLINEABLE feedFold #-}
 
+-- Rewrite in the style of the Monad instance above.
 combine :: Monad m => (forall a. (a -> a) -> a -> a) -> Fold a m (b -> c) -> Fold a m b -> Fold a m c
 combine c (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
   acc = isStopT a1 >>~ \b -> Triple b <$> a1 <+> duplicate a2
@@ -213,9 +232,10 @@ groupBy1 :: Monad m => (a -> a -> Bool) -> Fold a m b -> Fold b m c -> Fold a m 
 groupBy1 p (Fold g1 f1 a1) (Fold g2 f2 a2) = Fold final step acc where
   acc = a2 =>> Triple (const True) a1
 
-  step (Triple p' a1' a2') x | p' x      = more $ pair a1' a2'
-                             | otherwise = cross (a1' >>~ g1) a2' f2 =>> pair a1
-                             where pair a = Triple (p x) (a >># flip f1 x)
+  step (Triple p' a1' a2') x
+    | p' x      = more $ pair a1' a2'
+    | otherwise = cross (a1' >>~ g1) a2' f2 =>> pair a1
+    where pair a = Triple (p x) (a >># flip f1 x)
 
   final (Triple _ a1' a2') = cross (a1' >>~ g1) a2' f2 >>~ g2
 {-# INLINABLE groupBy1 #-}
@@ -254,14 +274,8 @@ splitOne :: (Monad m, Eq a) => a -> Fold a m b -> Fold b m c -> Fold a m c
 splitOne = splitWhen . (/=)
 {-# INLINABLE splitOne #-}
 
-consume :: (Monad m, Foldable t) => Fold a m b -> t a -> DriveT m (Fold a m b)
-consume = mfoldM (flip feed)
-{-# INLINABLE consume #-}
-
--- It can be defined in terms of `Lib.foldM` as
--- execM f = runExceptT . Lib.foldM (driveToExceptT .* flip feed) f >=> runFold . runEither
 execM :: (Monad m, Foldable t) => Fold a m b -> t a -> m b
-execM f = consume f >~> runFold
+execM (Fold g f a) xs = a >># flip (mfoldM f) xs >>~ g
 {-# INLINABLE execM #-}
 
 exec :: Foldable t => Fold a Identity b -> t a -> b

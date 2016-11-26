@@ -52,8 +52,7 @@ suite = do
     perf (take 2) [1..3]            === [1,2]
     perf (take 3) [1..3]            === [1..3]
     perf (take 3) [1..]             === [1..3]
-    -- Unlike `take 0 undefined`, so `execM` is too strict.
-    perf (take 0) (1:undefined)     === ([] :: [Int])
+    perf (take 0)  undefined        === ([] :: [Int])
     perf (take 3) (1:2:3:undefined) === [1..3]
   label "filter" $ do
     perf (filter even) []      === []
