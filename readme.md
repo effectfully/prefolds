@@ -164,7 +164,7 @@ instance AndMonadTrans DriveT where
 
 Here are some suggestive synonyms:
 
-```
+```haskell
 halt :: SumApplicative f => a -> f a
 halt = spure
 
