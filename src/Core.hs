@@ -134,8 +134,8 @@ instance SumMonadTrans (Fold a) where
   {-# INLINABLE slift #-}
 
 instance AndMonadTrans (Fold a) where
-  mlift = driveHalt . mlift
-  {-# INLINABLE mlift #-}
+  alift = driveHalt . alift
+  {-# INLINABLE alift #-}
 
 instance MFunctor (Fold a) where
   hoist h (Fold g f a) = Fold (h . g) (hoist h .* f) (hoist h a)
@@ -297,7 +297,7 @@ instance Functor (Pattern m acc) where
   {-# INLINE fmap #-}
 
 instance Monad m => Applicative (Pattern m acc) where
-  pure x = Pattern mpure
+  pure _ = Pattern more
   {-# INLINE pure #-}
 
   Pattern f <*> Pattern g = Pattern (f >#> g)

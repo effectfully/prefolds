@@ -19,8 +19,8 @@ import Control.Comonad
 import Control.Monad.Morph (MFunctor, hoist)
 
 infixr 9 .*, <.>, <.*>
-infixl 4 <+>, +>, <&>, &>, <$>>, <*>>, <+>>
-infixl 1 >>+, >>&, >>#, >#>
+infixl 4 <+>, +>, <+, <&>, &>, <&, <$>>, <*>>, <+>>, <&>>
+infixl 1 >>+, >+>, >>&, >&>, >>#, >#>
 
 (.*) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
 g .* f = \x y -> g (f x y)
@@ -43,7 +43,7 @@ foldM f a xs = foldr (\x r (!a) -> f a x >>= r) return xs a
 {-# INLINE foldM #-}
 
 mfoldM :: (Foldable t, AndMonoMonad m) => (b -> a -> m b) -> b -> t a -> m b
-mfoldM f a xs = foldr (\x r (!a) -> f a x >># r) mpure xs a
+mfoldM f a xs = foldr (\x r (!a) -> f a x >># r) ampure xs a
 {-# INLINE mfoldM #-}
 
 -- The usual Applicative laws.
@@ -51,18 +51,26 @@ class Functor f => SumApplicative f where
   spure :: a -> f a
   (<+>) :: f (a -> b) -> f a -> f b
 
-(+>) :: SumApplicative f => f a -> f b -> f b
-a +> b = const id <$> a <+> b
-{-# INLINE (+>) #-}
+  (+>) :: f a -> f b -> f b
+  a +> b = id <$ a <+> b
+  {-# INLINE (+>) #-}
+
+  (<+) :: f a -> f b -> f a
+  a <+ b = const <$> a <+> b
+  {-# INLINE (<+) #-}
 
 -- The usual Applicative laws.
 class Functor f => AndApplicative f where
   apure :: a -> f a
   (<&>) :: f (a -> b) -> f a -> f b
 
-(&>) :: AndApplicative f => f a -> f b -> f b
-a &> b = const id <$> a <&> b
-{-# INLINE (&>) #-}
+  (&>) :: f a -> f b -> f b
+  a &> b = id <$ a <&> b
+  {-# INLINE (&>) #-}
+
+  (<&) :: f a -> f b -> f a
+  a <& b = const <$> a <&> b
+  {-# INLINE (<&) #-}
 
 -- The usual Monad laws.
 class SumApplicative m => SumMonad m where
@@ -74,6 +82,10 @@ class SumApplicative m => SumMonad m where
   sjoin a = a >>+ id
   {-# INLINE sjoin #-}
 
+  (>+>) :: (a -> m b) -> (b -> m c) -> a -> m c
+  f >+> g = \x -> f x >>+ g
+  {-# INLINE (>+>) #-}
+
 -- The usual Monad laws.
 class AndApplicative m => AndMonad m where
   (>>&) :: m a -> (a -> m b) -> m b
@@ -84,18 +96,22 @@ class AndApplicative m => AndMonad m where
   ajoin a = a >>& id
   {-# INLINE ajoin #-}
 
+  (>&>) :: (a -> m b) -> (b -> m c) -> a -> m c
+  f >&> g = \x -> f x >>& g
+  {-# INLINE (>&>) #-}
+
 -- The usual Monad laws.
 class Functor m => AndMonoMonad m where
-  mpure :: a -> m a
-  default mpure :: AndApplicative m => a -> m a
-  mpure = apure
-  {-# INLINE mpure #-}
+  ampure :: a -> m a
+  default ampure :: AndApplicative m => a -> m a
+  ampure = apure
+  {-# INLINE ampure #-}
 
   (>>#) :: m a -> (a -> m a) -> m a
 
-(>#>) :: AndMonoMonad m => (a -> m a) -> (a -> m a) -> a -> m a
-f >#> g = \x -> f x >># g
-{-# INLINE (>#>) #-}
+  (>#>) :: (a -> m a) -> (a -> m a) -> a -> m a
+  f >#> g = \x -> f x >># g
+  {-# INLINE (>#>) #-}
 
 -- Transforms a Monad into a SumMonad.
 class SumMonadTrans t where
@@ -103,7 +119,7 @@ class SumMonadTrans t where
 
 -- Transforms a Monad into a AndMonad.
 class AndMonadTrans t where
-  mlift :: Monad m => m a -> t m a
+  alift :: Monad m => m a -> t m a
 
 -- A variant of http://elvishjerricco.github.io/2016/10/12/kleisli-functors.html
 -- kmap return     === id
@@ -128,6 +144,10 @@ h <*>> a = kjoin $ h <*> a
 (<+>>) :: (KleisliFunctor m f, SumApplicative f) => f (a -> m b) -> f a -> f b
 h <+>> a = kjoin $ h <+> a
 {-# INLINE (<+>>) #-}
+
+(<&>>) :: (KleisliFunctor m f, AndApplicative f) => f (a -> m b) -> f a -> f b
+h <&>> a = kjoin $ h <&> a
+{-# INLINE (<&>>) #-}
 
 instance Monad m => KleisliFunctor m m where
   kmap = (=<<)

@@ -140,7 +140,7 @@ halt = spure
 {-# INLINEABLE halt #-}
 
 more :: AndMonoMonad m => a -> m a
-more = mpure
+more = ampure
 {-# INLINEABLE more #-}
 
 haltWhen :: (SumApplicative m, AndMonoMonad m) => (a -> Bool) -> a -> m a
@@ -156,7 +156,7 @@ stop = slift
 {-# INLINEABLE stop #-}
 
 keep :: (AndMonadTrans t, Monad m) => m a -> t m a
-keep = mlift
+keep = alift
 {-# INLINEABLE keep #-}
 
 terminate :: (SumApplicative m, AndMonoMonad m) => m a -> m a
@@ -174,14 +174,14 @@ instance Functor f => Functor (DriveT f) where
 instance Applicative f => SumApplicative (DriveT f) where
   spure = DriveT . pure . Stop
   {-# INLINEABLE spure #-}
-  
+
   DriveT h <+> DriveT a = DriveT $ (<+>) <$> h <*> a
   {-# INLINEABLE (<+>) #-}
 
 instance Applicative f => AndApplicative (DriveT f) where
   apure = DriveT . pure . More
   {-# INLINEABLE apure #-}
-  
+
   DriveT h <&> DriveT a = DriveT $ (<&>) <$> h <*> a
   {-# INLINEABLE (<&>) #-}
 
@@ -209,8 +209,8 @@ instance SumMonadTrans DriveT where
   {-# INLINEABLE slift #-}
 
 instance AndMonadTrans DriveT where
-  mlift a = DriveT $ More <$> a
-  {-# INLINEABLE mlift #-}
+  alift a = DriveT $ More <$> a
+  {-# INLINEABLE alift #-}
 
 instance MFunctor DriveT where
   hoist h (DriveT a) = DriveT $ h a

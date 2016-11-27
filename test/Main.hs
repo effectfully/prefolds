@@ -313,6 +313,21 @@ foldMN :: Monad m => (f acc -> (acc -> m b) -> m b) ->
             (acc -> m b) -> (acc -> a -> f acc) -> f acc -> [m a] -> m b
 foldMN (>>~) g f a xs = a >>~ foldr (\mx r !a -> mx >>= \x -> f a x >>~ r) g xs
 
+-- 2
+-- 4
+-- 6
+-- [120,12]
+-- [7,8,9,10]
+-- 11
+example :: IO ()
+example = execM (final <$> sink1 <+> sink2 <*> sink3 <&>> total) [1..] where
+  final x y zs n = print [x,y] >> print zs >> print n
+  sink1 = take 4 $ map succ product                     -- 2 * 3 * 4 * 5 = 120
+  sink2 = take 6 . filter even $ traverse_ print &> sum -- 2 + 4 + 6 = 12
+  sink3 = takeWhile (<= 10) list                        -- [7,8,9,10]
+  total = length -- total number of processed elements is 11, since
+                 -- `takeWhile (<= 10)` forced `11` before it stopped.
+
 -- 1 1
 -- 2 4
 -- 3 9
