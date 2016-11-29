@@ -106,11 +106,8 @@ instance AndApplicative Drive where
 
 ```haskell
 -- The usual monad laws.
-class Functor m => AndMonoMonad m where
-  ampure :: a -> m a
-  default ampure :: AndApplicative m => a -> m a
-  ampure = apure
-
+class Functor m => MonoMonad m where
+  mpure :: a -> m a
   (>>#) :: m a -> (a -> m a) -> m a
 
   (>#>) :: (a -> m a) -> (a -> m a) -> a -> m a
@@ -120,7 +117,7 @@ class Functor m => AndMonoMonad m where
 With this we can define
 
 ```haskell
-instance AndMonoMonad Drive where
+instance MonoMonad Drive where
   Stop x >># f = Stop x
   More x >># f = f x
 ```
@@ -145,20 +142,22 @@ The last instance is used a lot across the code.
 There are also some `MonadTrans`-like type classes:
 
 ```haskell
-class SumMonadTrans t where
+-- Transforms a Monad into a  SumApplicative.
+class SumApplicativeTrans t where
   slift :: Monad m => m a -> t m a
 
-class AndMonadTrans t where
+-- Transforms a Monad into an AndApplicative.
+class AndApplicativeTrans t where
   mlift :: Monad m => m a -> t m a
 ```
 
 Instances of these type classes:
 
 ```haskell
-instance SumMonadTrans  DriveT where
+instance SumApplicativeTrans  DriveT where
   slift a = DriveT $ Stop <$> a
 
-instance AndMonadTrans DriveT where
+instance AndApplicativeTrans DriveT where
   mlift a = DriveT $ More <$> a
 ```
 
@@ -168,29 +167,29 @@ Here are some suggestive synonyms:
 halt :: SumApplicative f => a -> f a
 halt = spure
 
-more :: AndMonoMonad m => a -> m a
-more = ampure
+more :: MonoMonad m => a -> m a
+more = mpure
 
-haltWhen :: (SumApplicative m, AndMonoMonad m) => (a -> Bool) -> a -> m a
+haltWhen :: (SumApplicative m, MonoMonad m) => (a -> Bool) -> a -> m a
 haltWhen p x = if p x then halt x else more x
 
-moreWhen :: (SumApplicative m, AndMonoMonad m) => (a -> Bool) -> a -> m a
+moreWhen :: (SumApplicative m, MonoMonad m) => (a -> Bool) -> a -> m a
 moreWhen p x = if p x then more x else halt x
 
-stop :: (SumMonadTrans t, Monad m) => m a -> t m a
+stop :: (SumApplicativeTrans t, Monad m) => m a -> t m a
 stop = slift
 
-keep :: (AndMonadTrans t, Monad m) => m a -> t m a
+keep :: (AndApplicativeTrans t, Monad m) => m a -> t m a
 keep = alift
 
-terminate :: (SumApplicative m, AndMonoMonad m) => m a -> m a
+terminate :: (SumApplicative m, MonoMonad m) => m a -> m a
 terminate a = a >># halt
 
-terminateWhen :: (SumApplicative m, AndMonoMonad m) => (a -> Bool) -> m a -> m a
+terminateWhen :: (SumApplicative m, MonoMonad m) => (a -> Bool) -> m a -> m a
 terminateWhen p a = a >># \x -> if p x then halt x else more x
 ```
 
-`Fold a m` is a `Monad`, a `SumApplicative` and an `AndApplicative` (as you've seen in the example above) and `Fold a` is a `SumMonadTrans` and an `AndMonadTrans`.
+`Fold a m` is a `Monad`, a `SumApplicative` and an `AndApplicative` (as you've seen in the example above) and `Fold a` is a `SumApplicativeTrans` and an `AndApplicativeTrans`.
 
 ## Kleisli functors
 

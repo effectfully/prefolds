@@ -129,11 +129,11 @@ instance Monad m => Monad (Fold a m) where
     final (Right f2) = runFoldMore f2
   {-# INLINABLE (>>=) #-}
 
-instance SumMonadTrans (Fold a) where
+instance SumApplicativeTrans (Fold a) where
   slift = driveMore . slift
   {-# INLINABLE slift #-}
 
-instance AndMonadTrans (Fold a) where
+instance AndApplicativeTrans (Fold a) where
   alift = driveHalt . alift
   {-# INLINABLE alift #-}
 

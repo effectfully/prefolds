@@ -20,7 +20,7 @@ import Control.Monad.Morph (MFunctor, hoist)
 
 infixr 9 .*, <.>, <.*>
 infixl 4 <+>, +>, <+, <&>, &>, <&, <$>>, <*>>, <+>>, <&>>
-infixl 1 >>+, >+>, >>&, >&>, >>#, >#>
+infixl 1 >>#, >#>
 
 (.*) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
 g .* f = \x y -> g (f x y)
@@ -42,8 +42,8 @@ foldM :: (Foldable t, Monad m) => (b -> a -> m b) -> b -> t a -> m b
 foldM f a xs = foldr (\x r (!a) -> f a x >>= r) return xs a
 {-# INLINE foldM #-}
 
-mfoldM :: (Foldable t, AndMonoMonad m) => (b -> a -> m b) -> b -> t a -> m b
-mfoldM f a xs = foldr (\x r (!a) -> f a x >># r) ampure xs a
+mfoldM :: (Foldable t, MonoMonad m) => (b -> a -> m b) -> b -> t a -> m b
+mfoldM f a xs = foldr (\x r (!a) -> f a x >># r) mpure xs a
 {-# INLINE mfoldM #-}
 
 -- The usual Applicative laws.
@@ -73,52 +73,20 @@ class Functor f => AndApplicative f where
   {-# INLINE (<&) #-}
 
 -- The usual Monad laws.
-class SumApplicative m => SumMonad m where
-  (>>+) :: m a -> (a -> m b) -> m b
-  a >>+ f = sjoin $ fmap f a
-  {-# INLINE (>>+) #-}
-
-  sjoin :: m (m a) -> m a
-  sjoin a = a >>+ id
-  {-# INLINE sjoin #-}
-
-  (>+>) :: (a -> m b) -> (b -> m c) -> a -> m c
-  f >+> g = \x -> f x >>+ g
-  {-# INLINE (>+>) #-}
-
--- The usual Monad laws.
-class AndApplicative m => AndMonad m where
-  (>>&) :: m a -> (a -> m b) -> m b
-  a >>& f = ajoin $ fmap f a
-  {-# INLINE (>>&) #-}
-
-  ajoin :: m (m a) -> m a
-  ajoin a = a >>& id
-  {-# INLINE ajoin #-}
-
-  (>&>) :: (a -> m b) -> (b -> m c) -> a -> m c
-  f >&> g = \x -> f x >>& g
-  {-# INLINE (>&>) #-}
-
--- The usual Monad laws.
-class Functor m => AndMonoMonad m where
-  ampure :: a -> m a
-  default ampure :: AndApplicative m => a -> m a
-  ampure = apure
-  {-# INLINE ampure #-}
-
+class Functor m => MonoMonad m where
+  mpure :: a -> m a
   (>>#) :: m a -> (a -> m a) -> m a
 
   (>#>) :: (a -> m a) -> (a -> m a) -> a -> m a
   f >#> g = \x -> f x >># g
   {-# INLINE (>#>) #-}
 
--- Transforms a Monad into a SumMonad.
-class SumMonadTrans t where
+-- Transforms a Monad into a  SumApplicative.
+class SumApplicativeTrans t where
   slift :: Monad m => m a -> t m a
 
--- Transforms a Monad into a AndMonad.
-class AndMonadTrans t where
+-- Transforms a Monad into an AndApplicative.
+class AndApplicativeTrans t where
   alift :: Monad m => m a -> t m a
 
 -- A variant of http://elvishjerricco.github.io/2016/10/12/kleisli-functors.html

@@ -72,19 +72,10 @@ instance Traversable Drive where
   traverse f = drive (Stop <.> f) (More <.> f)
   {-# INLINEABLE traverse #-}
 
-instance SumMonad Drive where  
-  a >>+ f = join $ fmap f a where
-    join (Stop (Stop x)) = Stop x
-    join  a              = More $ runDrive (runDrive a)
-  {-# INLINABLE (>>+) #-}
+instance MonoMonad Drive where
+  mpure = apure
+  {-# INLINABLE mpure #-}
 
-instance AndMonad Drive where  
-  a >>& f = join $ fmap f a where
-    join (More (More x)) = More x
-    join  a              = Stop $ runDrive (runDrive a)
-  {-# INLINABLE (>>&) #-}
-
-instance AndMonoMonad Drive where  
   a >># f = drive Stop f a
   {-# INLINABLE (>>#) #-}
 
@@ -139,31 +130,31 @@ halt :: SumApplicative f => a -> f a
 halt = spure
 {-# INLINEABLE halt #-}
 
-more :: AndMonoMonad m => a -> m a
-more = ampure
+more :: MonoMonad m => a -> m a
+more = mpure
 {-# INLINEABLE more #-}
 
-haltWhen :: (SumApplicative m, AndMonoMonad m) => (a -> Bool) -> a -> m a
+haltWhen :: (SumApplicative m, MonoMonad m) => (a -> Bool) -> a -> m a
 haltWhen p x = if p x then halt x else more x
 {-# INLINEABLE haltWhen #-}
 
-moreWhen :: (SumApplicative m, AndMonoMonad m) => (a -> Bool) -> a -> m a
+moreWhen :: (SumApplicative m, MonoMonad m) => (a -> Bool) -> a -> m a
 moreWhen p x = if p x then more x else halt x
 {-# INLINEABLE moreWhen #-}
 
-stop :: (SumMonadTrans t, Monad m) => m a -> t m a
+stop :: (SumApplicativeTrans t, Monad m) => m a -> t m a
 stop = slift
 {-# INLINEABLE stop #-}
 
-keep :: (AndMonadTrans t, Monad m) => m a -> t m a
+keep :: (AndApplicativeTrans t, Monad m) => m a -> t m a
 keep = alift
 {-# INLINEABLE keep #-}
 
-terminate :: (SumApplicative m, AndMonoMonad m) => m a -> m a
+terminate :: (SumApplicative m, MonoMonad m) => m a -> m a
 terminate a = a >># halt
 {-# INLINEABLE terminate #-}
 
-terminateWhen :: (SumApplicative m, AndMonoMonad m) => (a -> Bool) -> m a -> m a
+terminateWhen :: (SumApplicative m, MonoMonad m) => (a -> Bool) -> m a -> m a
 terminateWhen p a = a >># \x -> if p x then halt x else more x
 {-# INLINEABLE terminateWhen #-}
 
@@ -185,15 +176,10 @@ instance Applicative f => AndApplicative (DriveT f) where
   DriveT h <&> DriveT a = DriveT $ (<&>) <$> h <*> a
   {-# INLINEABLE (<&>) #-}
 
-instance Monad m => SumMonad (DriveT m) where
-  DriveT a >>+ f = DriveT . fmap sjoin . join $ traverse (getDriveT . f) <$> a
-  {-# INLINABLE (>>+) #-}
+instance Monad m => MonoMonad (DriveT m) where
+  mpure = apure
+  {-# INLINABLE mpure #-}
 
-instance Monad m => AndMonad (DriveT m) where
-  DriveT a >>& f = DriveT . fmap ajoin . join $ traverse (getDriveT . f) <$> a
-  {-# INLINABLE (>>&) #-}
-
-instance Monad m => AndMonoMonad (DriveT m) where
   a >># f = driveDriveT halt f a
   {-# INLINABLE (>>#) #-}
 
@@ -204,17 +190,17 @@ instance Monad m => Comonad (DriveT m) where
   extend f = driveDriveT (halt . f . halt) (more . f . more)
   {-# INLINABLE extend #-}
 
-instance SumMonadTrans DriveT where
+instance SumApplicativeTrans DriveT where
   slift a = DriveT $ Stop <$> a
   {-# INLINEABLE slift #-}
 
-instance AndMonadTrans DriveT where
+instance AndApplicativeTrans DriveT where
   alift a = DriveT $ More <$> a
   {-# INLINEABLE alift #-}
 
 instance MFunctor DriveT where
   hoist h (DriveT a) = DriveT $ h a
-  {-# INLINEABLE hoist#-}
+  {-# INLINEABLE hoist #-}
 
 instance Monad m => Absorb (DriveT m) m where
   a >>~ f = runDriveT a >>= f

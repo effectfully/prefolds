@@ -218,7 +218,7 @@ suite = do
         exec ((,) <$> take 4 list <+> take 3 list) [1..]  === ([1..4],[1..3])
         exec ((,) <$> take 4 list <+> take 4 list) [1..]  === ([1..4],[1..4])
     label "sequential" $ do
-      label "connect" $ do
+      label "apply" $ do
         exec ((,) <$> list        <*> list)        []     === ([],[] :: [Int])
         exec ((,) <$> list        <*> list)        [1..4] === ([1..4],[])
         exec ((,) <$> take 3 list <*> list)        [1..4] === ([1..3],[4])
