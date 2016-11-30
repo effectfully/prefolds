@@ -39,15 +39,15 @@ instance Functor m => Functor (Tup a m) where
   {-# INLINEABLE fmap #-}
 
 instance Monad m => TransPairing (Fun a) (Tup a) m where
-  interpretT g (Fun f) (Tup p) = g (sndp <$> p) (p >>= f . fstp)
+  interpretT g (Fun f) (Tup p) = p >>= \(Pair x y) -> g (return y) (f x)
   {-# INLINEABLE interpretT #-}
 
 --   DriveT (Fun a m) acc
--- ~ DriveT (/\b -> a -> m b) acc
+-- ~ Fun a m (Drive acc)
 -- ~ a -> m (Drive acc)
 type Fold   a = Stepper (Fun a)
 --   DriveT (Tup a m) acc
--- ~ DriveT (/\b -> m (Pair a b)) acc
+-- ~ Tup a m (Drive acc)
 -- ~ m (Pair a (Drive acc))
 type Unfold a = Stepper (Tup a)
 
