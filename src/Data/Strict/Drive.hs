@@ -176,6 +176,14 @@ instance Applicative f => AndApplicative (DriveT f) where
   DriveT h <&> DriveT a = DriveT $ (<&>) <$> h <*> a
   {-# INLINEABLE (<&>) #-}
 
+instance Foldable m => Foldable (DriveT m) where
+  foldMap f (DriveT a) = foldMap (f . runDrive) a
+  {-# INLINEABLE foldMap #-}
+
+instance Traversable m => Traversable (DriveT m) where
+  traverse f (DriveT a) = fmap DriveT $ traverse (traverse f) a
+  {-# INLINEABLE traverse #-}
+
 instance Monad m => MonoMonad (DriveT m) where
   mpure = apure
   {-# INLINABLE mpure #-}

@@ -27,8 +27,12 @@ g .* f = \x y -> g (f x y)
 {-# INLINE (.*) #-}
 
 (<.>) :: Functor f => (b -> c) -> (a -> f b) -> a -> f c
-g <.> f = fmap g . f
+g <.> f = \x -> g <$> f x
 {-# INLINE (<.>) #-}
+
+(<.) :: Functor f => c -> (a -> f b) -> a -> f c
+y <. f = \x -> y <$ f x
+{-# INLINE (<.) #-}
 
 (<.*>) :: Functor f => (c -> d) -> (a -> b -> f c) -> a -> b -> f d
 g <.*> f = fmap g .* f
