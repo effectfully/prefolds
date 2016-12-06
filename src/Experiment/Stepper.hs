@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes, ExistentialQuantification, NoImplicitPrelude #-}
-module Core where
+module Stepper where
 
 import Lib
 import Data.Strict.Tuple
@@ -16,7 +16,7 @@ instance Monad m => Functor (Stepper t m) where
   {-# INLINEABLE fmap #-}
 
 interpretDriveT :: TransPairing t s m
-              => (DriveT m a -> DriveT m b -> m c) -> DriveT (t m) b -> DriveT (s m) a -> m c
+                => (DriveT m a -> DriveT m b -> m c) -> DriveT (t m) b -> DriveT (s m) a -> m c
 interpretDriveT f (DriveT b) (DriveT a) = interpretT (\a' b' -> f (DriveT a') (DriveT b')) b a
 {-# INLINEABLE interpretDriveT #-}
 

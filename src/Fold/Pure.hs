@@ -1,5 +1,5 @@
 {-# LANGUAGE ExistentialQuantification, NoImplicitPrelude #-}
-module Pure where
+module Fold.Pure where
 
 import Lib
 import Data.Strict.Maybe
@@ -114,7 +114,6 @@ minimumBy c = fold1 f where
 maximumBy :: (a -> a -> Ordering) -> Fold a (Maybe a)
 maximumBy c = fold1 f where
   f x y = case c x y of
-      GT -> x
-      _  -> y
+    GT -> x
+    _  -> y
 {-# INLINABLE maximumBy #-}
-

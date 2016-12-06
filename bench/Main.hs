@@ -1,9 +1,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 module Main where
 
-import Lib as P
-import Core
-import Fold
+import Prefolds
 import Data.Monoid
 import qualified Prelude as P
 import qualified Data.List as P
@@ -19,18 +17,20 @@ nofail1 :: IO ()
 nofail1 = print . exec (span (+) (1 ==) sum sum) $ replicate (10^7) (1 :: Integer)
 
 whnfFrom1To :: ([Integer] -> b) -> Integer -> Benchmarkable
-whnfFrom1To f = whnf $ f . enumFromTo 1
+whnfFrom1To f = whnf $ f . P.enumFromTo 1
 {-# INLINE whnfFrom1To #-}
 
 whnfFrom1 :: (Int -> [Integer] -> b) -> Int -> Benchmarkable
 whnfFrom1 f = whnf $ \n -> f n [n `seq` 1..]
 {-# INLINE whnfFrom1 #-}
 
--- Prelude version is 20% faster.
+-- Prelude version is 30% faster. It was only 20% faster, what did happen?
+-- Is it because the definition of `exec` was "optimized"?
 benchSum :: Benchmark
 benchSum = bgroup "sum"
-  [ bench "Prefolds" $ whnfFrom1To (exec sum) (10^7)
-  , bench "Prelude"  $ whnfFrom1To  P.sum     (10^7)
+  [ bench "Prefolds/List"   $ whnfFrom1To (exec sum) (10^7)
+  -- , bench "Prefolds/Unfold" $ whnf (\n -> pairing_ (take n sum) $ enumFrom 1) (10^7)
+  , bench "Prelude"         $ whnfFrom1To  P.sum     (10^7)
   ]
 
 -- Prelude version is 20% slower.

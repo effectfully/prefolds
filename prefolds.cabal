@@ -21,9 +21,12 @@ library
     , Data.Strict.Maybe
     , Data.Strict.Drive
     , Lib
-    , Pure
-    , Core
-    , Fold
+    , Prefolds
+  other-modules:
+      Fold.Pure
+    , Fold.Core
+    , Unfold.Pure
+    , Unfold.Core
   build-depends:
       base
     , comonad

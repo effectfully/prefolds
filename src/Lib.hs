@@ -4,19 +4,31 @@ module Lib
   , module Prelude
   , module Data.Functor.Identity
   , module Data.Bifunctor
+  , module Data.Traversable
+  , module Control.Applicative
   , module Control.Monad
   , module Control.Comonad
   , module Control.Monad.Morph
+  , module Control.Monad.Trans.Reader
+  , module Control.Monad.Trans.State.Strict
+  , module Control.Monad.Trans.Except
   ) where
 
 import Prelude hiding (map, filter, takeWhile, dropWhile, span, take, drop, scan, groupBy, inits,
                        foldMap, mconcat, null, length, all, any, and, or, sum, product,
-                       genericLength, head, last, minimum, maximum, minimumBy, maximumBy)
+                       elem, notElem, genericLength, head, last,
+                       minimum, maximum, minimumBy, maximumBy,
+                       iterate, repeat, enumFrom, enumFromTo, enumFromThenTo)
 import Data.Functor.Identity
 import Data.Bifunctor
-import Control.Monad (join, (>=>))
+import Data.Traversable (foldMapDefault)
+import Control.Applicative ((<**>))
+import Control.Monad (join, (>=>), ap)
 import Control.Comonad
 import Control.Monad.Morph (MFunctor, hoist)
+import Control.Monad.Trans.Reader (ReaderT(..), ask, local)
+import Control.Monad.Trans.State.Strict (StateT(..), get, put, modify')
+import Control.Monad.Trans.Except (ExceptT(..), runExceptT, throwE, catchE)
 
 infixr 9 .*, <.>, <.*>
 infixl 4 <+>, +>, <+, <&>, &>, <&, <$>>, <*>>, <+>>, <&>>
@@ -37,6 +49,14 @@ y <. f = \x -> y <$ f x
 (<.*>) :: Functor f => (c -> d) -> (a -> b -> f c) -> a -> b -> f d
 g <.*> f = fmap g .* f
 {-# INLINE (<.*>) #-}
+
+tupl :: Functor f => a -> f b -> f (a, b)
+tupl = fmap . (,)
+{-# INLINE tupl #-}
+
+tupr :: Functor f => f a -> b -> f (a, b)
+tupr = flip $ fmap . flip (,)
+{-# INLINE tupr #-}
 
 runEither :: Either a a -> a
 runEither = either id id
@@ -124,3 +144,6 @@ h <&>> a = kjoin $ h <&> a
 instance Monad m => KleisliFunctor m m where
   kmap = (=<<)
   {-# INLINE kmap #-}
+
+class TransTraversable t s where
+  sequenceT :: Monad m => t (s m) a -> s (t m) a

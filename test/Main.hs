@@ -2,9 +2,7 @@
 {-# LANGUAGE BangPatterns, RankNTypes #-}
 module Main where
 
-import Lib
-import Core
-import Fold
+import Prefolds
 import qualified Prelude as P
 import qualified Data.List as P
 import Control.Monad.Trans.Writer
@@ -253,44 +251,44 @@ suite = do
         exec (take 2 sum >>= \n -> (,) n <$> take n list) [1..5] === (3, [3..5])
         exec (take 2 sum >>= \n -> (,) n <$> take n list) [1..6] === (3, [3..5])
   label "null" $ do
-    exec null []             === True
-    exec null [1]            === False
-    exec null (1 : repeat 2) === False
-    exec null (1:undefined)  === False
+    exec null []               === True
+    exec null [1]              === False
+    exec null (1 : P.repeat 2) === False
+    exec null (1:undefined)    === False
   label "length" $ do
     exec length []     === 0
     exec length [1]    === 1
     exec length [1..5] === 5
   label "all" $ do
-    exec (all even) []                    === True
-    exec (all even) [1]                   === False
-    exec (all even) [2]                   === True
-    exec (all even) [2,3]                 === False
-    exec (all even) [2,4,6]               === True
-    exec (all even) ([2,4,6] ++ repeat 1) === False
-    exec (all even) (2:4:6:1:undefined)   === False
+    exec (all even) []                      === True
+    exec (all even) [1]                     === False
+    exec (all even) [2]                     === True
+    exec (all even) [2,3]                   === False
+    exec (all even) [2,4,6]                 === True
+    exec (all even) ([2,4,6] ++ P.repeat 1) === False
+    exec (all even) (2:4:6:1:undefined)     === False
   label "any" $ do
-    exec (any even) []                    === False
-    exec (any even) [1]                   === False
-    exec (any even) [2]                   === True
-    exec (any even) [2,3]                 === True
-    exec (any even) [1,3,4]               === True
-    exec (any even) ([1,3,5] ++ repeat 2) === True
-    exec (any even) (1:3:5:2:undefined)   === True
+    exec (any even) []                      === False
+    exec (any even) [1]                     === False
+    exec (any even) [2]                     === True
+    exec (any even) [2,3]                   === True
+    exec (any even) [1,3,4]                 === True
+    exec (any even) ([1,3,5] ++ P.repeat 2) === True
+    exec (any even) (1:3:5:2:undefined)     === True
   label "find" $ do
-    exec (find even) []                    === Nothing
-    exec (find even) [1]                   === Nothing
-    exec (find even) [2]                   === Just 2
-    exec (find even) [2,3]                 === Just 2
-    exec (find even) [1,3,4]               === Just 4
-    exec (find even) ([1,3,5] ++ repeat 2) === Just 2
-    exec (find even) (1:3:5:2:undefined)   === Just 2
+    exec (find even) []                      === Nothing
+    exec (find even) [1]                     === Nothing
+    exec (find even) [2]                     === Just 2
+    exec (find even) [2,3]                   === Just 2
+    exec (find even) [1,3,4]                 === Just 4
+    exec (find even) ([1,3,5] ++ P.repeat 2) === Just 2
+    exec (find even) (1:3:5:2:undefined)     === Just 2
   label "head" $ do
-    exec head []             === (Nothing :: Maybe Int)
-    exec head [1]            === Just 1
-    exec head [1..5]         === Just 1
-    exec head (1 : repeat 2) === Just 1
-    exec head (1:undefined)  === Just 1
+    exec head []               === (Nothing :: Maybe Int)
+    exec head [1]              === Just 1
+    exec head [1..5]           === Just 1
+    exec head (1 : P.repeat 2) === Just 1
+    exec head (1:undefined)    === Just 1
   label "last" $ do
     exec last []     === (Nothing :: Maybe Int)
     exec last [1]    === Just 1
@@ -304,7 +302,7 @@ suite = do
     exec ((,,) <$> take 4 list <+> take 3 list <*> take 2 list) [1..] === ([1..4],[1..3],[5..6])
     exec ((,) <$> sum <&> any even) [1..3] === (3,True)
     exec ((,) <$> sum <+> any even) [1..3] === (6,True)
-    exec (handle P.traverse $ take 5 sum) ([1..3] : repeat [4..]) === 15
+    exec (handle P.traverse $ take 5 sum) ([1..3] : P.repeat [4..]) === 15
 
 checkSuite :: IO ()
 checkSuite = putStrLn $ runSuite suite

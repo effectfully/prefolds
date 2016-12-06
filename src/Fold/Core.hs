@@ -1,12 +1,12 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes, ExistentialQuantification, NoImplicitPrelude #-}
-module Core where
+module Fold.Core where
 
-import Lib
+import Lib hiding (foldM)
 import Data.Strict.Tuple
 import Data.Strict.Drive
 import qualified Lib
-import qualified Pure
+import qualified Fold.Pure as Pure
 
 infixl 4 </>, />, </>>
 
@@ -141,6 +141,43 @@ instance MFunctor (Fold a) where
   hoist h (Fold g f a) = Fold (h . g) (hoist h .* f) (hoist h a)
   {-# INLINEABLE hoist #-}
 
+-- TODO: is this strict?
+runFoldReaderT :: Monad m => r -> Fold a (ReaderT r m) b -> Fold a m b
+runFoldReaderT r (Fold g f a) = Fold final step (runDriveReaderT r a) where
+  step a x = runDriveReaderT r (f a x)
+
+  final a = runReaderT (g a) r
+{-# INLINEABLE runFoldReaderT #-}
+
+instance TransTraversable (Fold a) (ReaderT r) where
+  sequenceT = ReaderT . flip runFoldReaderT
+  {-# INLINEABLE sequenceT #-}
+
+-- TODO: this is not strict, perhaps.
+runFoldStateT :: Monad m => s -> Fold a (StateT s m) b -> Fold a m (b, s)
+runFoldStateT s (Fold g f a) = Fold final step (runDriveStateT s a) where
+  step (a, s) x = runDriveStateT s (f a x)
+
+  final (a, s) = runStateT (g a) s
+{-# INLINEABLE runFoldStateT #-}
+
+instance TransTraversable (Fold a) (StateT s) where
+  sequenceT = StateT . flip runFoldStateT
+  {-# INLINEABLE sequenceT #-}
+
+-- TODO: this is not strict, perhaps.
+runFoldExceptT :: Monad m => Fold a (ExceptT e m) b -> Fold a m (Either e b)
+runFoldExceptT (Fold g f a) = Fold final step (runDriveExceptT a) where
+  step (Left  e) x = saturated_consumed "addExceptT"
+  step (Right a) x = runDriveExceptT (f a x)
+
+  final = join <.> runExceptT . traverse g
+{-# INLINEABLE runFoldExceptT #-}
+
+instance TransTraversable (Fold a) (ExceptT e) where
+  sequenceT = ExceptT . runFoldExceptT
+  {-# INLINEABLE sequenceT #-}
+
 runFold :: Monad m => Fold a m b -> m b
 runFold (Fold g f a) = a >>~ g
 {-# INLINEABLE runFold #-}
@@ -264,6 +301,7 @@ splitWhen :: Monad m => (a -> Bool) -> Fold a m b -> Fold b m c -> Fold a m c
 splitWhen = chunks .* takeWhile
 {-# INLINABLE splitWhen #-}
 
+-- exec (splitOne ',' list list) "abc,def,"  === ["abc", "def"]
 splitOne :: (Monad m, Eq a) => a -> Fold a m b -> Fold b m c -> Fold a m c
 splitOne = splitWhen . (/=)
 {-# INLINABLE splitOne #-}
@@ -308,3 +346,111 @@ type Handler b m a = forall acc. (a -> Pattern m acc a) -> b -> Pattern m acc b
 handle :: Monad m => Handler b m a -> Fold a m c -> Fold b m c
 handle k (Fold g f a) = Fold g (flip $ getPattern . k (Pattern . flip f)) a
 {-# INLINEABLE handle #-}
+
+foldM :: Monad m => (b -> a -> m b) -> b -> Fold a m b
+foldM f = driveFold (keep .* f) . more
+{-# INLINABLE foldM #-}
+
+foldMapM :: (Monad m, Monoid b) => (a -> m b) -> Fold a m b
+foldMapM f = foldM (\a x -> mappend a <$> f x) mempty
+{-# INLINABLE foldMapM #-}
+
+traverse_ :: Monad m => (a -> m ()) -> Fold a m ()
+traverse_ f = foldM (const f) ()
+{-# INLINABLE traverse_ #-}
+
+fromPureFold :: Monad m => Pure.Fold a b -> Fold a m b
+fromPureFold (Pure.Fold g f a) = Fold (pure . g) (driveToDriveT .* f) (more a)
+{-# INLINABLE fromPureFold #-}
+
+fold  :: Monad m => (b -> a -> b) -> b -> Fold a m b
+fold = fromPureFold .* Pure.fold
+{-# INLINABLE fold #-}
+
+list :: Monad m => Fold a m [a]
+list = fromPureFold Pure.list
+{-# INLINABLE list #-}
+
+revList :: Monad m => Fold a m [a]
+revList = fromPureFold Pure.revList
+{-# INLINABLE revList #-}
+
+foldMap :: (Monad m, Monoid b) => (a -> b) -> Fold a m b
+foldMap = fromPureFold . Pure.foldMap
+{-# INLINABLE foldMap #-}
+
+mconcat :: (Monad m, Monoid a) => Fold a m a
+mconcat = fromPureFold Pure.mconcat
+{-# INLINABLE mconcat #-}
+
+null :: Monad m => Fold a m Bool
+null = fromPureFold Pure.null
+{-# INLINABLE null #-}
+
+length :: Monad m => Fold a m Int
+length = fromPureFold Pure.length
+{-# INLINABLE length #-}
+
+all :: Monad m => (a -> Bool) -> Fold a m Bool
+all = fromPureFold . Pure.all
+{-# INLINEABLE all #-}
+
+any :: Monad m => (a -> Bool) -> Fold a m Bool
+any = fromPureFold . Pure.any
+{-# INLINEABLE any #-}
+
+and :: Monad m => Fold Bool m Bool
+and = fromPureFold Pure.and
+{-# INLINEABLE and #-}
+
+or :: Monad m => Fold Bool m Bool
+or = fromPureFold Pure.or
+{-# INLINEABLE or #-}
+
+sum :: (Monad m, Num a) => Fold a m a
+sum = fromPureFold Pure.sum
+{-# INLINABLE sum #-}
+
+product :: (Monad m, Num a) => Fold a m a
+product = fromPureFold Pure.product
+{-# INLINABLE product #-}
+
+elem :: (Monad m, Eq a) => a -> Fold a m Bool
+elem = fromPureFold . Pure.elem
+{-# INLINABLE elem #-}
+
+notElem :: (Monad m, Eq a) => a -> Fold a m Bool
+notElem = fromPureFold . Pure.notElem
+{-# INLINABLE notElem #-}
+
+genericLength :: (Monad m, Num b) => Fold a m b
+genericLength = fromPureFold Pure.genericLength
+{-# INLINABLE genericLength #-}
+
+head :: Monad m => Fold a m (Maybe a)
+head = fromPureFold Pure.head
+{-# INLINABLE head #-}
+
+last :: Monad m => Fold a m (Maybe a)
+last = fromPureFold Pure.last
+{-# INLINABLE last #-}
+
+find :: Monad m => (a -> Bool) -> Fold a m (Maybe a)
+find = fromPureFold . Pure.find
+{-# INLINABLE find #-}
+
+minimum :: (Monad m, Ord a) => Fold a m (Maybe a)
+minimum = fromPureFold Pure.minimum
+{-# INLINABLE minimum #-}
+
+maximum :: (Monad m, Ord a) => Fold a m (Maybe a)
+maximum = fromPureFold Pure.maximum
+{-# INLINABLE maximum #-}
+
+minimumBy :: Monad m => (a -> a -> Ordering) -> Fold a m (Maybe a)
+minimumBy = fromPureFold . Pure.minimumBy
+{-# INLINABLE minimumBy #-}
+
+maximumBy :: Monad m => (a -> a -> Ordering) -> Fold a m (Maybe a)
+maximumBy = fromPureFold . Pure.maximumBy
+{-# INLINABLE maximumBy #-}

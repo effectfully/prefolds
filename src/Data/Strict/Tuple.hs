@@ -1,4 +1,3 @@
-{-# LANGUAGE PatternSynonyms #-}
 module Data.Strict.Tuple where
 
 import Data.Bifunctor

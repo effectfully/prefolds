@@ -1,10 +1,7 @@
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, RankNTypes #-}
+{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
 module Data.Strict.Drive where
 
 import Lib
-
-import Data.Traversable (foldMapDefault)
-import Control.Monad.Trans.Except (ExceptT(..))
 
 infixl 1 >>~, >~>
 
@@ -209,6 +206,30 @@ instance AndApplicativeTrans DriveT where
 instance MFunctor DriveT where
   hoist h (DriveT a) = DriveT $ h a
   {-# INLINEABLE hoist #-}
+
+instance TransTraversable DriveT (ReaderT r) where
+  sequenceT (DriveT (ReaderT f)) = ReaderT $ DriveT . f
+  {-# INLINEABLE sequenceT #-}
+
+runDriveReaderT :: Monad m => r -> DriveT (ReaderT r m) a -> DriveT m a
+runDriveReaderT r = flip runReaderT r . sequenceT
+{-# INLINEABLE runDriveReaderT #-}
+
+instance TransTraversable DriveT (StateT s) where
+  sequenceT (DriveT (StateT f)) = StateT $ DriveT . uncurry tupr <.> f
+  {-# INLINEABLE sequenceT #-}
+
+runDriveStateT :: Monad m => s -> DriveT (StateT s m) a -> DriveT m (a, s)
+runDriveStateT s = flip runStateT s . sequenceT
+{-# INLINEABLE runDriveStateT #-}
+
+instance TransTraversable DriveT (ExceptT e) where
+  sequenceT (DriveT (ExceptT s)) = ExceptT . DriveT $ either (Stop . Left) (fmap Right) <$> s 
+  {-# INLINEABLE sequenceT #-}
+
+runDriveExceptT :: Monad m => DriveT (ExceptT e m) a -> DriveT m (Either e a)
+runDriveExceptT = runExceptT . sequenceT
+{-# INLINEABLE runDriveExceptT #-}
 
 instance Monad m => Absorb (DriveT m) m where
   a >>~ f = runDriveT a >>= f
