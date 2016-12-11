@@ -1,5 +1,5 @@
-{-# LANGUAGE ExistentialQuantification, TypeOperators, NoImplicitPrelude #-}
-{-# LANGUAGE BangPatterns, RankNTypes #-}
+{-# LANGUAGE ExistentialQuantification, RankNTypes #-}
+{-# LANGUAGE BangPatterns, TypeOperators, NoImplicitPrelude #-}
 module Main where
 
 import Prefolds
@@ -19,7 +19,7 @@ runSuite = fin . gos . execWriter where
   fin [] = "OK"
   fin ss = P.intercalate "\n" ss
 
-  gos = concatMap go . zip [1..]
+  gos = concatMap go . zip [1 :: Int ..]
 
   go (i, x :== y)    = [concat [show i, ": ", show x, " is not ", show y] | x /= y]
   go (i, Label s ts) = P.map (\t -> s ++ "/" ++ t) $ gos ts

@@ -14,10 +14,9 @@ module Lib
   , module Control.Monad.Trans.Except
   ) where
 
-import Prelude hiding (map, filter, takeWhile, dropWhile, span, take, drop, scan, groupBy, inits,
+import Prelude hiding (map, filter, takeWhile, dropWhile, span, take, drop,
                        foldMap, mconcat, null, length, all, any, and, or, sum, product,
-                       elem, notElem, genericLength, head, last,
-                       minimum, maximum, minimumBy, maximumBy,
+                       elem, notElem, head, last, minimum, maximum,
                        iterate, repeat, enumFrom, enumFromTo, enumFromThenTo)
 import Data.Functor.Identity
 import Data.Bifunctor
@@ -63,11 +62,11 @@ runEither = either id id
 {-# INLINE runEither #-}
 
 foldM :: (Foldable t, Monad m) => (b -> a -> m b) -> b -> t a -> m b
-foldM f a xs = foldr (\x r (!a) -> f a x >>= r) return xs a
+foldM f a xs = foldr (\x r (!a') -> f a' x >>= r) return xs a
 {-# INLINE foldM #-}
 
 mfoldM :: (Foldable t, MonoMonad m) => (b -> a -> m b) -> b -> t a -> m b
-mfoldM f a xs = foldr (\x r (!a) -> f a x >># r) mpure xs a
+mfoldM f a xs = foldr (\x r (!a') -> f a' x >># r) mpure xs a
 {-# INLINE mfoldM #-}
 
 -- The usual Applicative laws.

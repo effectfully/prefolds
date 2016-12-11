@@ -6,6 +6,7 @@ import Data.Monoid
 import qualified Prelude as P
 import qualified Data.List as P
 import Criterion.Main
+import Control.Monad.Trans.State.Strict (modify)
 
 -- 140 MB total memory in use.
 fail1 :: IO ()
@@ -24,14 +25,26 @@ whnfFrom1 :: (Int -> [Integer] -> b) -> Int -> Benchmarkable
 whnfFrom1 f = whnf $ \n -> f n [n `seq` 1..]
 {-# INLINE whnfFrom1 #-}
 
+test2 :: Integer
+test2 = snd $ exec f [1..10^6] where
+  f = runFoldStateT' 0 $ traverse_ (modify . (+))
+
+test3 :: (Integer, Integer)
+test3 = first getSum $ exec f [1..10^6] where
+  f = runFoldStateT' 0 $ foldMapM (\n -> modify (n +) >> return (Sum n))
+
+main = print test3
+
 -- Prelude version is 30% faster. It was only 20% faster, what did happen?
 -- Is it because the definition of `exec` was "optimized"?
 benchSum :: Benchmark
 benchSum = bgroup "sum"
   [ bench "Prefolds/List"   $ whnfFrom1To (exec sum) (10^7)
   -- , bench "Prefolds/Unfold" $ whnf (\n -> pairing_ (take n sum) $ enumFrom 1) (10^7)
+  {-, bench "Prefolds/State"  $
+      whnfFrom1To (evalStateT . exec . runFoldStateT 0 $ traverse_ (\_ -> modify') (10^5)-}
   , bench "Prelude"         $ whnfFrom1To  P.sum     (10^7)
-  ]
+  ] -- where plus =
 
 -- Prelude version is 20% slower.
 benchAverage :: Benchmark
@@ -120,17 +133,17 @@ benchBind = bgroup "bind"
 suite :: [Benchmark]
 suite =
   [ benchSum
-  , benchAverage
+  {-, benchAverage
   , benchAverageTake
   , benchSlowAverageTake
   , benchScan
   , benchScanTake
   , benchGroup
   , benchInits
-  , benchBind
+  , benchBind-}
   ]
 
 benchSuite :: IO ()
 benchSuite = defaultMain suite
 
-main = benchSuite
+-- main = benchSuite

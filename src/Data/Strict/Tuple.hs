@@ -45,6 +45,14 @@ sndp :: Pair a b -> b
 sndp (Pair a b) = b
 {-# INLINE sndp #-}
 
+fromPair :: Pair a b -> (a, b)
+fromPair (Pair a b) = (a, b)
+{-# INLINE fromPair #-}
+
+toPair :: (a, b) -> Pair a b
+toPair (a, b) = Pair a b
+{-# INLINE toPair #-}
+
 fstt :: Triple a b c -> a
 fstt (Triple a b c) = a
 {-# INLINE fstt #-}

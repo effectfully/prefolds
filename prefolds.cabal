@@ -37,7 +37,7 @@ library
   default-language:
       Haskell2010
   GHC-Options:
-      -O2
+      -O2 -Wall -fno-warn-unused-matches
   
 test-suite prefolds-test
   type:
@@ -70,8 +70,7 @@ Benchmark prefolds-bench
     , prefolds
     , transformers
   ghc-options:
-      -O2
-      -rtsopts
+      -O2 -rtsopts -with-rtsopts=-sstderr
   default-language:
       Haskell2010
     

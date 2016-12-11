@@ -6,7 +6,6 @@ import Lib hiding (foldM)
 import Data.Strict.Tuple
 import Data.Strict.Maybe
 import Data.Strict.Drive
-import qualified Lib
 import qualified Unfold.Pure as Pure
 
 data Unfold a m b = forall acc.
