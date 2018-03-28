@@ -1,9 +1,5 @@
 # prefolds
 
-## Disclaimer
-
-This is my first attempt to write something usable in Haskell. Any kind of feedback is highly appreciated.
-
 ## A quick taste
 
 With [`Control.Foldl`](https://hackage.haskell.org/package/foldl-1.2.1/docs/Control-Foldl.html) you can write
